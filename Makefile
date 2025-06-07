@@ -134,14 +134,20 @@ test-fast:
 test-serial: lint
 	uv run pytest -v
 
+# Vulture - static analysis for dead code
+# Also checks for unimported .py files in tests/shared/
 vulture:
-	uv run vulture
+	$(UV_RUN) vulture
 	@echo "Checking for unused files in tests/shared/*.py files..."
-	@for file in tests/shared/*.py; do \
-		if [[ "$$file" != *"__init__.py" ]]; then \
-			basename=$$(basename "$$file"); \
-			basename=$${basename%.py}; \
-			grep -q -r "from .*$$basename" $(TESTS_PATH) || (echo "$$file is never imported" && exit 1); \
-		fi; \
-	done
+	@unused_files=""; \
+	for file in $(TESTS_PATH)/shared/*.py; do \
+		if ! grep -r -q "$$(basename $$file .py)" $(TESTS_PATH); then \
+			unused_files="$$unused_files $$file"; \
+		fi \
+	done; \
+	if [ -n "$$unused_files" ]; then \
+		echo "Error: Unused files (never imported) found in $(TESTS_PATH)/shared/: $$unused_files"; \
+		echo "Please remove them or ensure they are imported in your tests."; \
+		exit 1; \
+	fi
 	@echo "Vulture check completed."
