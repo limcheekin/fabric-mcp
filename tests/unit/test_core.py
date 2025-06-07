@@ -6,7 +6,7 @@ import sys
 from asyncio.exceptions import CancelledError
 from collections.abc import Callable
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from anyio import WouldBlock
@@ -14,11 +14,11 @@ from fastmcp import FastMCP
 
 from fabric_mcp import __version__
 from fabric_mcp.core import FabricMCP
-from tests.shared.mocking_utils import (
-    COMMON_PATTERN_DETAILS,
-    COMMON_PATTERN_LIST,
-    create_fabric_api_mock,
+from tests.shared.fabric_api_mocks import (
+    FabricApiMockBuilder,
+    mock_fabric_api_client,
 )
+from tests.shared.mocking_utils import COMMON_PATTERN_LIST
 
 
 def test_cli_version():
@@ -120,26 +120,31 @@ def test_tool_registration_coverage():
     tools: list[Callable[..., Any]] = getattr(server, "_FabricMCP__tools")
     assert len(tools) == 6
 
-    # Test each tool to ensure they're callable
-    fabric_list_patterns = tools[0]
+    _test_list_patterns_tool(tools[0])
+    _test_get_pattern_details_tool(tools[1])
+    _test_run_pattern_tool(tools[2])
+    _test_list_models_tool(tools[3])
+    _test_list_strategies_tool(tools[4])
+    _test_get_configuration_tool(tools[5])
 
-    # Mock the FabricApiClient for fabric_list_patterns test
-    with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-        create_fabric_api_mock(mock_api_client_class).with_successful_response(
-            COMMON_PATTERN_LIST
-        ).build()
 
+def _test_list_patterns_tool(fabric_list_patterns: Callable[..., Any]) -> None:
+    # Test fabric_list_patterns with new shared utilities
+    builder = FabricApiMockBuilder().with_successful_pattern_list(COMMON_PATTERN_LIST)
+    with mock_fabric_api_client(builder):
         patterns_result: list[str] = fabric_list_patterns()
         assert isinstance(patterns_result, list)
         assert len(patterns_result) == 3
 
-    fabric_get_pattern_details = tools[1]
-    # Mock the FabricApiClient for fabric_get_pattern_details test
-    with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-        create_fabric_api_mock(mock_api_client_class).with_successful_response(
-            COMMON_PATTERN_DETAILS
-        ).build()
 
+def _test_get_pattern_details_tool(
+    fabric_get_pattern_details: Callable[..., Any],
+) -> None:
+    # Test fabric_get_pattern_details with new shared utilities
+    builder = FabricApiMockBuilder().with_successful_pattern_details(
+        "test_pattern", "Test pattern description", "# Test pattern system prompt"
+    )
+    with mock_fabric_api_client(builder):
         pattern_details_result: dict[str, str] = fabric_get_pattern_details(
             "test_pattern"
         )
@@ -151,40 +156,41 @@ def test_tool_registration_coverage():
         assert pattern_details_result["description"] == "Test pattern description"
         assert pattern_details_result["system_prompt"] == "# Test pattern system prompt"
 
-    fabric_run_pattern = tools[2]
-    # Mock the FabricApiClient for fabric_run_pattern test
-    with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-        mock_api_client = Mock()
-        mock_api_client_class.return_value = mock_api_client
 
-        # Mock SSE response
-        mock_response = Mock()
-        mock_response.iter_lines.return_value = [
-            'data: {"type": "content", "content": "Hello, ", "format": "text"}',
-            'data: {"type": "content", "content": "World!", "format": "text"}',
-            'data: {"type": "complete"}',
-        ]
-        mock_api_client.post.return_value = mock_response
+def _test_run_pattern_tool(fabric_run_pattern: Callable[..., Any]) -> None:
+    # Test fabric_run_pattern with new shared utilities
+    builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
 
+    with mock_fabric_api_client(builder) as mock_api_client:
         run_pattern_result = fabric_run_pattern("test_pattern", "test_input")
         assert isinstance(run_pattern_result, dict)
         assert "output_format" in run_pattern_result
         assert "output_text" in run_pattern_result
         assert run_pattern_result["output_text"] == "Hello, World!"
         assert run_pattern_result["output_format"] == "text"
+        mock_api_client.close.assert_called_once()
 
-    fabric_list_models = tools[3]
+
+def _test_list_models_tool(
+    fabric_list_models: Callable[..., Any],
+) -> None:
     models_result = fabric_list_models()
     assert isinstance(models_result, dict)
     assert "models" in models_result
     assert "vendors" in models_result
 
-    fabric_list_strategies = tools[4]
+
+def _test_list_strategies_tool(
+    fabric_list_strategies: Callable[..., Any],
+) -> None:
     strategies_result = fabric_list_strategies()
     assert isinstance(strategies_result, dict)
     assert "strategies" in strategies_result
 
-    fabric_get_configuration = tools[5]
+
+def _test_get_configuration_tool(
+    fabric_get_configuration: Callable[..., Any],
+) -> None:
     config_result = fabric_get_configuration()
     assert isinstance(config_result, dict)
     assert "openai_api_key" in config_result

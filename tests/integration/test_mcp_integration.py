@@ -8,9 +8,8 @@ import logging
 import subprocess
 import sys
 from asyncio.exceptions import CancelledError
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import httpx
 import pytest
 from mcp import McpError
 
@@ -20,11 +19,11 @@ from tests.shared.fabric_api.utils import (
     MockFabricAPIServer,
     fabric_api_server_fixture,
 )
-from tests.shared.mocking_utils import (
-    COMMON_PATTERN_DETAILS,
-    COMMON_PATTERN_LIST,
-    create_fabric_api_mock,
+from tests.shared.fabric_api_mocks import (
+    FabricApiMockBuilder,
+    mock_fabric_api_client,
 )
+from tests.shared.mocking_utils import COMMON_PATTERN_LIST
 
 _ = fabric_api_server_fixture  # to get rid of unused variable warning
 
@@ -75,41 +74,33 @@ class TestFabricMCPCore:
 
         # Test specific tool functionality with mocking
         list_patterns_tool = tools[0]
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            create_fabric_api_mock(mock_api_client_class).with_successful_response(
-                COMMON_PATTERN_LIST
-            ).build()
-
+        builder = FabricApiMockBuilder().with_successful_pattern_list(
+            COMMON_PATTERN_LIST
+        )
+        with mock_fabric_api_client(builder):
             result: list[str] = list_patterns_tool()
             assert isinstance(result, list)
             assert len(result) == 3
 
         pattern_details_tool = tools[1]
         # Mock the FabricApiClient for pattern details test
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            create_fabric_api_mock(mock_api_client_class).with_successful_response(
-                COMMON_PATTERN_DETAILS
-            ).build()
-
+        builder = FabricApiMockBuilder().with_successful_pattern_details(
+            name="test_pattern",
+            description="Test pattern description",
+            system_prompt="# Test pattern system prompt",
+        )
+        with mock_fabric_api_client(builder):
             result = pattern_details_tool("test_pattern")
             assert isinstance(result, dict)
             assert "name" in result
 
     @pytest.mark.asyncio
-    async def test_fabric_list_patterns_with_mocked_api(
-        self, server: FabricMCP, mock_fabric_api_response: Mock
-    ):
+    async def test_fabric_list_patterns_with_mocked_api(self, server: FabricMCP):
         """Test the fabric_list_patterns tool with mocked API calls."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            # Setup mock API client
-            mock_api_client = Mock()
-            mock_api_client_class.return_value = mock_api_client
+        patterns = ["analyze_claims", "summarize", "create_story"]
+        builder = FabricApiMockBuilder().with_successful_pattern_list(patterns)
 
-            # Setup mock response
-            mock_response = Mock()
-            mock_response.json.return_value = mock_fabric_api_response["patterns"]
-            mock_api_client.get.return_value = mock_response
-
+        with mock_fabric_api_client(builder) as mock_client:
             # Execute the tool
             tools = getattr(server, "_FabricMCP__tools", [])
             list_patterns_tool = tools[0]
@@ -117,29 +108,22 @@ class TestFabricMCPCore:
 
             assert isinstance(result, list)
             assert len(result) > 0
-            assert result == mock_fabric_api_response["patterns"]
+            assert result == patterns
 
             # Verify API client was called correctly
-            mock_api_client.get.assert_called_once_with("/patterns/names")
-            mock_api_client.close.assert_called_once()
+            mock_client.get.assert_called_once_with("/patterns/names")
+            mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_fabric_pattern_details_with_mocked_api(self, server: FabricMCP):
         """Test the fabric_get_pattern_details tool with mocked API calls."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            # Setup mock API client
-            mock_api_client = Mock()
-            mock_api_client_class.return_value = mock_api_client
+        builder = FabricApiMockBuilder().with_successful_pattern_details(
+            name="analyze_claims",
+            description="Analyze truth claims",
+            system_prompt="# IDENTITY\nYou are an expert fact checker...",
+        )
 
-            # Setup mock response with actual Fabric API format
-            mock_response = Mock()
-            mock_response.json.return_value = {
-                "Name": "analyze_claims",
-                "Description": "Analyze truth claims",
-                "Pattern": "# IDENTITY\nYou are an expert fact checker...",
-            }
-            mock_api_client.get.return_value = mock_response
-
+        with mock_fabric_api_client(builder) as mock_client:
             # Execute the tool
             tools = getattr(server, "_FabricMCP__tools", [])
             pattern_details_tool = tools[1]
@@ -155,43 +139,43 @@ class TestFabricMCPCore:
             )
 
             # Verify API client was called correctly
-            mock_api_client.get.assert_called_once_with("/patterns/analyze_claims")
-            mock_api_client.close.assert_called_once()
+            mock_client.get.assert_called_once_with("/patterns/analyze_claims")
+            mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_fabric_run_pattern_with_mocked_api(
-        self, server: FabricMCP, mock_fabric_api_response: Mock
-    ):
+    async def test_fabric_run_pattern_with_mocked_api(self, server: FabricMCP):
         """Test the fabric_run_pattern tool with mocked API calls."""
-        with patch("httpx.Client") as mock_client:
-            # Setup mock response
-            mock_response = Mock()
-            mock_response.json.return_value = mock_fabric_api_response[
-                "pattern_execution"
-            ]
-            mock_response.status_code = 200
-            mock_client.return_value.post.return_value = mock_response
+        # This test uses the real fabric_run_pattern implementation
+        # which returns actual SSE parsed output, not hardcoded values
+        builder = FabricApiMockBuilder().with_successful_sse(
+            content="This claim appears to be factual based on...", format_type="text"
+        )
 
-            # Execute the tool (currently returns hardcoded values)
+        with mock_fabric_api_client(builder) as _:
+            # Execute the tool (now uses real implementation)
             tools = getattr(server, "_FabricMCP__tools", [])
             run_pattern_tool = tools[2]
-            result = run_pattern_tool("analyze_claims", "Test input text")
+            result = run_pattern_tool(
+                pattern_name="analyze_claims",
+                input_text="Test input text",
+                stream=False,
+            )
 
             assert isinstance(result, dict)
             assert "output_format" in result
             assert "output_text" in result
+            assert result["output_text"] == (
+                "This claim appears to be factual based on..."
+            )
 
     @pytest.mark.asyncio
     async def test_error_handling_with_fabric_api_down(self, server: FabricMCP):
         """Test error handling when Fabric API is unavailable."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            # Simulate connection error
-            mock_api_client = Mock()
-            mock_api_client_class.return_value = mock_api_client
-            mock_api_client.get.side_effect = httpx.ConnectError(
-                "Unable to connect to Fabric API"
-            )
+        builder = FabricApiMockBuilder().with_connection_error(
+            "Unable to connect to Fabric API"
+        )
 
+        with mock_fabric_api_client(builder) as _:
             # Test that the tool raises appropriate MCP error
             tools = getattr(server, "_FabricMCP__tools", [])
             list_patterns_tool = tools[0]
@@ -206,22 +190,11 @@ class TestFabricMCPCore:
     @pytest.mark.asyncio
     async def test_error_handling_with_fabric_api_error(self, server: FabricMCP):
         """Test error handling when Fabric API returns errors."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-            # Simulate HTTP error
-            mock_api_client = Mock()
-            mock_api_client_class.return_value = mock_api_client
+        builder = FabricApiMockBuilder().with_http_error(
+            status_code=500, response_text="Internal Server Error"
+        )
 
-            mock_response = Mock()
-            mock_response.status_code = 500
-            mock_response.reason_phrase = "Internal Server Error"
-
-            http_error = httpx.HTTPStatusError(
-                "Internal Server Error",
-                request=Mock(),
-                response=mock_response,
-            )
-            mock_api_client.get.side_effect = http_error
-
+        with mock_fabric_api_client(builder) as _:
             # Test that the tool raises appropriate MCP error
             tools = getattr(server, "_FabricMCP__tools", [])
             list_patterns_tool = tools[0]

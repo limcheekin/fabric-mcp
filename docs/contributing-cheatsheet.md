@@ -16,6 +16,11 @@ git checkout -b feature/my-change
 
 # make changes
 
+# Run tests and ensure coverage targets met
+# (testing also runs linters and the "vulture" tool)
+make test
+make coverage
+
 git commit -m "feat: my changes"  # ← Hooks run, ensure good practices
 git push -u origin feature/my-change
 ```

@@ -46,11 +46,12 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.1",
-    "ruff>=0.11.12",
-    "uv>=0.7.11",
+    "ruff>=0.11.13",
+    "uv>=0.7.12",
     "fastapi>=0.115.12",
     "uvicorn>=0.34.3",
     "pytest-xdist>=3.7.0",
+    "vulture>=2.14",
 ]
 
 [tool.pytest.ini_options]
@@ -94,3 +95,18 @@ include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
+
+[tool.vulture]
+exclude = [".venv/"]
+ignore_decorators = [
+    "@app.get",
+    "@app.post",
+    "@app.put",
+    "@app.delete",
+    "@app.patch",
+]
+make_whitelist = true
+min_confidence = 80
+paths = ["src", "tests"]
+sort_by_size = true
+verbose = false

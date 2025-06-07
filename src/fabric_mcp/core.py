@@ -194,11 +194,17 @@ class FabricMCP(FastMCP[None]):
                 dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
 
             Raises:
-                ValueError: If pattern_name is missing or empty.
-                ConnectionError: If unable to connect to Fabric API.
-                HTTPError: If Fabric API returns an error response.
+                McpError: For any API errors, connection issues, or parsing problems.
             """
-            return self._execute_fabric_pattern(pattern_name, input_text, config)
+            try:
+                return self._execute_fabric_pattern(pattern_name, input_text, config)
+            except (ConnectionError, RuntimeError, ValueError) as e:
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=f"Error executing pattern '{pattern_name}': {e}",
+                    )
+                ) from e
 
         self.__tools.append(fabric_run_pattern)
 
@@ -313,7 +319,7 @@ class FabricMCP(FastMCP[None]):
                 {
                     "userInput": input_text,
                     "patternName": pattern_name.strip(),
-                    "model": config.model_name or "gpt-4",
+                    "model": config.model_name or "gpt-4o",
                     "vendor": "openai",  # Default vendor
                     "contextName": "",
                     "strategyName": config.strategy_name or "",
@@ -361,6 +367,7 @@ class FabricMCP(FastMCP[None]):
         # Process SSE stream to collect all content
         output_chunks: list[str] = []
         output_format = "text"  # default
+        has_data = False  # Track if we received any actual data
 
         # Parse SSE response line by line
         for line in response.iter_lines():
@@ -370,6 +377,7 @@ class FabricMCP(FastMCP[None]):
 
             # SSE lines start with "data: "
             if line.startswith("data: "):
+                has_data = True
                 try:
                     data = json.loads(line[6:])  # Remove "data: " prefix
 
@@ -391,7 +399,12 @@ class FabricMCP(FastMCP[None]):
 
                 except json.JSONDecodeError as e:
                     self.logger.warning("Failed to parse SSE JSON: %s", e)
-                    continue
+                    # For malformed SSE data, raise an error after logging
+                    raise RuntimeError(f"Malformed SSE data: {e}") from e
+
+        # Check if we received no data at all
+        if not has_data:
+            raise RuntimeError("Empty SSE stream - no data received")
 
         # AC6: Return structured response
         return {

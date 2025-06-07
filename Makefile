@@ -2,10 +2,13 @@
 #
 
 .PHONY: _default bootstrap build clean coverage coverage-html \
-	coverage-show dev format help lint mcp-inspector merge tag test test-fast test-serial
+	coverage-show dev format help lint mcp-inspector merge tag \
+	test test-fast test-serial vulture
 
 COVERAGE_FAIL_UNDER := 90
 PACKAGE_PATH := src/fabric_mcp
+TESTS_PATH := tests
+
 
 # The node package manager could be npm, but why? pnpm is faster and more efficient
 # This is only needed if you are using the fastmcp dev server.
@@ -28,6 +31,7 @@ build:
 
 clean:
 	rm -rf .venv dist node_modules
+	@find $(PACKAGE_PATH) -name "*.pyc" -delete
 
 coverage:
 	uv run pytest -n auto --cov=$(PACKAGE_PATH) \
@@ -79,11 +83,11 @@ help:
 	@echo "  test-fast     Run tests with optimized parallel execution (skips linting)"
 	@echo "  test-serial   Run tests serially (single-threaded)"
 
-lint:
+lint: vulture
 	uv run ruff format --check .
 	uv run ruff check .
-	uv run pylint --fail-on=W0718 $(PACKAGE_PATH) tests
-	uv run pyright $(PACKAGE_PATH) tests
+	uv run pylint --fail-on=W0718 $(PACKAGE_PATH) $(TESTS_PATH)
+	uv run pyright $(PACKAGE_PATH) $(TESTS_PATH)
 
 merge:
 	@echo "This will merge develop into main and push to origin."
@@ -129,3 +133,14 @@ test-fast:
 test-serial: lint
 	uv run pytest -v
 
+vulture:
+	uv run vulture
+	@echo "Checking for unused files in tests/shared/*.py files..."
+	@for file in tests/shared/*.py; do \
+		if [[ "$$file" != *"__init__.py" ]]; then \
+			basename=$$(basename "$$file"); \
+			basename=$${basename%.py}; \
+			grep -q -r "from .*$$basename" $(TESTS_PATH) || (echo "$$file is never imported" && exit 1); \
+		fi; \
+	done
+	@echo "Vulture check completed."
