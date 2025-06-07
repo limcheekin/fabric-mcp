@@ -137,7 +137,7 @@ test-serial: lint
 # Vulture - static analysis for dead code
 # Also checks for unimported .py files in tests/shared/
 vulture:
-	$(UV_RUN) vulture
+	uv run vulture
 	@echo "Checking for unused files in tests/shared/*.py files..."
 	@unused_files=""; \
 	for file in $(TESTS_PATH)/shared/*.py; do \
