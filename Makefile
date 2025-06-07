@@ -31,7 +31,8 @@ build:
 
 clean:
 	rm -rf .venv dist node_modules
-	@find $(PACKAGE_PATH) -name "*.pyc" -delete
+	find $(PACKAGE_PATH) -name "*.pyc" -delete
+	find $(TESTS_PATH) -name "*.pyc" -delete
 
 coverage:
 	uv run pytest -n auto --cov=$(PACKAGE_PATH) \
