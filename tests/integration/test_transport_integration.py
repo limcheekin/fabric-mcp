@@ -154,8 +154,11 @@ class TransportTestBase:
                 assert "Failed to connect to Fabric API" in error_msg
 
     @pytest.mark.asyncio
-    async def test_fabric_run_pattern_tool(self, server_config: ServerConfig) -> None:
+    async def test_fabric_run_pattern_tool(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
         """Test fabric_run_pattern tool (non-streaming)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
         async with run_server(server_config, self.transport_type) as config:
             url = self.get_server_url(config)
             client = self.create_client(url)
@@ -178,9 +181,10 @@ class TransportTestBase:
 
     @pytest.mark.asyncio
     async def test_fabric_run_pattern_streaming_tool(
-        self, server_config: ServerConfig
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
     ) -> None:
         """Test fabric_run_pattern tool with streaming."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
         async with run_server(server_config, self.transport_type) as config:
             url = self.get_server_url(config)
             client = self.create_client(url)

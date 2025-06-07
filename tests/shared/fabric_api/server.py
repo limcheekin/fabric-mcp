@@ -5,6 +5,7 @@ for integration testing purposes. It serves the same endpoints that the real Fab
 API would serve, but with predictable mock data.
 """
 
+import json
 import logging
 import signal
 import sys
@@ -13,7 +14,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from fabric_mcp import __version__ as fabric_mcp_version
 
@@ -227,6 +228,83 @@ async def run_pattern(pattern_name: str, request_data: dict[str, Any]):
     }
 
     return mock_response
+
+
+@app.post("/chat")
+async def chat_endpoint(request_data: dict[str, Any]):
+    """Execute a chat request with patterns (streaming).
+
+    This mimics the real Fabric API endpoint POST /chat that handles
+    Server-Sent Events (SSE) streaming responses.
+    """
+
+    # Validate request structure
+    if "prompts" not in request_data or not isinstance(request_data["prompts"], list):
+        raise HTTPException(
+            status_code=400, detail="Invalid request: 'prompts' array required"
+        )
+
+    if not request_data["prompts"]:
+        raise HTTPException(
+            status_code=400, detail="Invalid request: at least one prompt required"
+        )
+
+    prompt: dict[str, Any] = request_data["prompts"][0]  # type: ignore[assignment]
+
+    # Extract pattern name with safe fallback and ensure it's a string
+    pattern_name: str = ""
+    if "patternName" in prompt and prompt["patternName"]:
+        pattern_name = str(prompt["patternName"])  # type: ignore[arg-type]
+
+    # Extract user input with safe fallback and ensure it's a string
+    user_input: str = ""
+    if "userInput" in prompt and prompt["userInput"]:
+        user_input = str(prompt["userInput"])  # type: ignore[arg-type]
+
+    if not pattern_name:
+        raise HTTPException(
+            status_code=400, detail="Invalid request: 'patternName' required"
+        )
+
+    # Check if pattern exists (for testing specific patterns)
+    if pattern_name not in MOCK_PATTERN_DETAILS and pattern_name != "test_pattern":
+        raise HTTPException(
+            status_code=404, detail=f"Pattern '{pattern_name}' not found"
+        )
+
+    logger.info(
+        "Chat endpoint: Running pattern '%s' with input length: %d",
+        pattern_name,
+        len(user_input),
+    )
+
+    def generate_sse_stream():
+        """Generate Server-Sent Events stream."""
+        # Mock streaming response chunks
+        mock_content_chunks: list[str] = [
+            f"Mock {pattern_name} output for: ",
+            user_input[:30] if user_input else "empty input",
+            "...\n\nThis is a test response from the mock Fabric API server.",
+        ]
+
+        # Send content chunks
+        for chunk in mock_content_chunks:
+            sse_data: dict[str, str] = {
+                "type": "content",
+                "content": chunk,
+                "format": "text",
+            }
+            yield f"data: {json.dumps(sse_data)}\n\n"
+
+        # Send completion signal
+        completion_data: dict[str, str] = {"type": "complete"}
+        yield f"data: {json.dumps(completion_data)}\n\n"
+
+    return StreamingResponse(
+        generate_sse_stream(),
+        media_type="text/plain",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
 
 
 @app.exception_handler(Exception)

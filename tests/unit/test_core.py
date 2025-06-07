@@ -6,7 +6,7 @@ import sys
 from asyncio.exceptions import CancelledError
 from collections.abc import Callable
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from anyio import WouldBlock
@@ -152,10 +152,26 @@ def test_tool_registration_coverage():
         assert pattern_details_result["system_prompt"] == "# Test pattern system prompt"
 
     fabric_run_pattern = tools[2]
-    run_pattern_result = fabric_run_pattern("test_pattern", "test_input")
-    assert isinstance(run_pattern_result, dict)
-    assert "output_format" in run_pattern_result
-    assert "output_text" in run_pattern_result
+    # Mock the FabricApiClient for fabric_run_pattern test
+    with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
+        mock_api_client = Mock()
+        mock_api_client_class.return_value = mock_api_client
+
+        # Mock SSE response
+        mock_response = Mock()
+        mock_response.iter_lines.return_value = [
+            'data: {"type": "content", "content": "Hello, ", "format": "text"}',
+            'data: {"type": "content", "content": "World!", "format": "text"}',
+            'data: {"type": "complete"}',
+        ]
+        mock_api_client.post.return_value = mock_response
+
+        run_pattern_result = fabric_run_pattern("test_pattern", "test_input")
+        assert isinstance(run_pattern_result, dict)
+        assert "output_format" in run_pattern_result
+        assert "output_text" in run_pattern_result
+        assert run_pattern_result["output_text"] == "Hello, World!"
+        assert run_pattern_result["output_format"] == "text"
 
     fabric_list_models = tools[3]
     models_result = fabric_list_models()

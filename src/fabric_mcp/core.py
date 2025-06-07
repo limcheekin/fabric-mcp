@@ -1,5 +1,6 @@
 """Core MCP server implementation using the Model Context Protocol."""
 
+import json
 import logging
 from asyncio.exceptions import CancelledError
 from collections.abc import Callable
@@ -173,43 +174,31 @@ class FabricMCP(FastMCP[None]):
         def fabric_run_pattern(
             pattern_name: str,
             input_text: str = "",
-            stream: bool = False,
+            stream: bool = False,  # pylint: disable=unused-argument
             config: PatternExecutionConfig | None = None,
         ) -> dict[Any, Any]:
             """
-            Execute a Fabric pattern with options and optional streaming.
+            Execute a Fabric pattern with input text and return complete output.
+
+            This tool calls the Fabric API's /chat endpoint to execute a named pattern
+            with the provided input text. Returns the complete LLM-generated output
+            in a non-streaming manner (streaming parameter is ignored in this version).
 
             Args:
-                pattern_name: The name of the fabric pattern to run.
-                input_text: The input text to be processed by the pattern.
-                stream: Whether to stream the output.
+                pattern_name: The name of the fabric pattern to run (required).
+                input_text: The input text to be processed by the pattern (optional).
+                stream: Whether to stream the output (ignored, always non-streaming).
                 config: Optional configuration for execution parameters.
 
             Returns:
-                dict[Any, Any]: Contains the output format and text.
+                dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
+
+            Raises:
+                ValueError: If pattern_name is missing or empty.
+                ConnectionError: If unable to connect to Fabric API.
+                HTTPError: If Fabric API returns an error response.
             """
-            if config is None:
-                config = PatternExecutionConfig()
-
-            # Use config to avoid unused warnings
-            _ = (
-                stream,
-                config.model_name,
-                config.strategy_name,
-                config.variables,
-                config.attachments,
-                config.temperature,
-                config.top_p,
-                config.presence_penalty,
-                config.frequency_penalty,
-            )
-
-            return {
-                "output_format": "markdown",
-                "output_text": (
-                    f"Pattern {pattern_name} executed with input: {input_text}"
-                ),
-            }
+            return self._execute_fabric_pattern(pattern_name, input_text, config)
 
         self.__tools.append(fabric_run_pattern)
 
@@ -298,3 +287,114 @@ class FabricMCP(FastMCP[None]):
         except (KeyboardInterrupt, CancelledError, WouldBlock):
             # Handle graceful shutdown
             self.logger.info("Server stopped by user.")
+
+    def _execute_fabric_pattern(
+        self,
+        pattern_name: str,
+        input_text: str,
+        config: PatternExecutionConfig | None,
+    ) -> dict[Any, Any]:
+        """
+        Execute a Fabric pattern against the API.
+
+        Separated from the tool method to reduce complexity.
+        """
+        # AC5: Client-side validation
+        if not pattern_name or not pattern_name.strip():
+            raise ValueError("pattern_name is required and cannot be empty")
+
+        # Use default config if none provided
+        if config is None:
+            config = PatternExecutionConfig()
+
+        # AC3: Construct proper JSON payload for Fabric API /chat endpoint
+        request_payload = {
+            "prompts": [
+                {
+                    "userInput": input_text,
+                    "patternName": pattern_name.strip(),
+                    "model": config.model_name or "gpt-4",
+                    "vendor": "openai",  # Default vendor
+                    "contextName": "",
+                    "strategyName": config.strategy_name or "",
+                }
+            ],
+            "language": "en",
+            "temperature": config.temperature or 0.7,
+            "topP": config.top_p or 0.9,
+            "frequencyPenalty": config.frequency_penalty or 0.0,
+            "presencePenalty": config.presence_penalty or 0.0,
+        }
+
+        # AC1: Use FabricApiClient to call Fabric's /chat endpoint
+        api_client = FabricApiClient()
+        try:
+            # AC4: Handle Server-Sent Events (SSE) stream response
+            response = api_client.post("/chat", json_data=request_payload)
+            response.raise_for_status()  # Raise HTTPError for bad responses
+
+            return self._parse_sse_response(response)
+
+        except httpx.ConnectError as e:
+            self.logger.error("Failed to connect to Fabric API: %s", e)
+            raise ConnectionError(f"Unable to connect to Fabric API: {e}") from e
+        except httpx.HTTPStatusError as e:
+            self.logger.error("Fabric API HTTP error: %s", e)
+            error_text = e.response.text
+            status_code = e.response.status_code
+            raise RuntimeError(
+                f"Fabric API returned error {status_code}: {error_text}"
+            ) from e
+        except Exception as e:
+            self.logger.error("Unexpected error calling Fabric API: %s", e)
+            raise RuntimeError(f"Unexpected error executing pattern: {e}") from e
+        finally:
+            api_client.close()
+
+    def _parse_sse_response(self, response: httpx.Response) -> dict[str, str]:
+        """
+        Parse Server-Sent Events response from Fabric API.
+
+        Returns:
+            dict[str, str]: Contains 'output_format' and 'output_text' fields.
+        """
+        # Process SSE stream to collect all content
+        output_chunks: list[str] = []
+        output_format = "text"  # default
+
+        # Parse SSE response line by line
+        for line in response.iter_lines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # SSE lines start with "data: "
+            if line.startswith("data: "):
+                try:
+                    data = json.loads(line[6:])  # Remove "data: " prefix
+
+                    if data.get("type") == "content":
+                        # Collect content chunks
+                        content = data.get("content", "")
+                        output_chunks.append(content)
+                        # Update format if provided
+                        output_format = data.get("format", output_format)
+
+                    elif data.get("type") == "complete":
+                        # End of stream
+                        break
+
+                    elif data.get("type") == "error":
+                        # Handle error from Fabric API
+                        error_msg = data.get("content", "Unknown Fabric API error")
+                        raise RuntimeError(f"Fabric API error: {error_msg}")
+
+                except json.JSONDecodeError as e:
+                    self.logger.warning("Failed to parse SSE JSON: %s", e)
+                    continue
+
+        # AC6: Return structured response
+        return {
+            "output_format": output_format,
+            "output_text": "".join(output_chunks),
+        }
