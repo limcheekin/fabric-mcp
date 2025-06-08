@@ -1,7 +1,7 @@
 # Makefile for
 #
 
-.PHONY: _default bootstrap build clean coverage coverage-html \
+.PHONY: __default _check_unused bootstrap build clean coverage coverage-html \
 	coverage-show dev format help lint mcp-inspector merge tag \
 	test test-fast test-serial vulture
 
@@ -18,7 +18,10 @@ STDIO_SERVER_SRC_FOR_MCP_INSPECTOR := $(PACKAGE_PATH)/server_stdio.py
 
 VERSION := $(shell uv run hatch version)
 
-_default: help
+__default: help
+
+_check_unused:
+	uv run python tests/scripts/check_shared_utils.py
 
 bootstrap:
 	uv sync --dev
@@ -83,6 +86,7 @@ help:
 	@echo "  test          Run tests with parallel execution"
 	@echo "  test-fast     Run tests with optimized parallel execution (skips linting)"
 	@echo "  test-serial   Run tests serially (single-threaded)"
+	@echo "  vulture       Run Vulture to check for dead code and unused imports"
 
 lint: vulture
 	uv run ruff format --check .
@@ -136,21 +140,5 @@ test-serial: lint
 
 # Vulture - static analysis for dead code
 # Also checks for unimported .py files in tests/shared/
-vulture:
+vulture: _check_unused
 	uv run vulture
-	@echo "Checking for unused files in tests/shared/*.py files..."
-	@unused_files=""; \
-	for file in $(TESTS_PATH)/shared/*.py; do \
-		if [ "$$(basename $$file)" = "__init__.py" ]; then \
-			continue; \
-		fi; \
-		if ! grep -r -q "from.*\\.$$(basename $$file .py)" $(TESTS_PATH); then \
-			unused_files="$$unused_files $$file"; \
-		fi \
-	done; \
-	if [ -n "$$unused_files" ]; then \
-		echo "Error: Unused files (never imported) found in $(TESTS_PATH)/shared/:$$unused_files"; \
-		echo "Please remove them or ensure they are imported in your tests."; \
-		exit 1; \
-	fi
-	@echo "Vulture check completed."
