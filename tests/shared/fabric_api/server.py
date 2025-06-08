@@ -223,7 +223,7 @@ async def run_pattern(pattern_name: str, request_data: dict[str, Any]):
     mock_response = {
         "output_format": "text",
         "output_text": f"Mock {pattern_name} output for input: {input_text[:50]}...",
-        "model_used": "gpt-4",
+        "model_used": "gpt-4o",
         "tokens_used": len(input_text) + 100,
         "execution_time_ms": 1250,
     }

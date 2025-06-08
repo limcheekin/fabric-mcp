@@ -49,7 +49,7 @@ class TestFabricMCPCore:
             },
             "pattern_execution": {
                 "result": "This claim appears to be factual based on...",
-                "model_used": "gpt-4",
+                "model_used": "gpt-4o",
                 "tokens": 150,
             },
         }

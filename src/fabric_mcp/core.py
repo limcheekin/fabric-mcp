@@ -213,9 +213,9 @@ class FabricMCP(FastMCP[None]):
             """Retrieve configured Fabric models by vendor."""
             # This is a placeholder for the actual implementation
             return {
-                "models": ["gpt-4", "gpt-3.5-turbo", "claude-3-opus"],
+                "models": ["gpt-4o", "gpt-3.5-turbo", "claude-3-opus"],
                 "vendors": {
-                    "openai": ["gpt-4", "gpt-3.5-turbo"],
+                    "openai": ["gpt-4o", "gpt-3.5-turbo"],
                     "anthropic": ["claude-3-opus"],
                 },
             }

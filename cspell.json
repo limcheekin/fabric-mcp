@@ -39,6 +39,7 @@
 		"mypy",
 		"ollama",
 		"openrouter",
+		"popleft",
 		"pylint",
 		"pylintrc",
 		"pypi",
