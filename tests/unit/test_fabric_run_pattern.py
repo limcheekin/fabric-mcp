@@ -19,8 +19,8 @@ from tests.shared.fabric_api_mocks import (
 )
 
 
-class TestFabricRunPatternBasicExecution:
-    """Test cases for basic fabric_run_pattern tool execution scenarios."""
+class TestFabricRunPatternFixtureBase:
+    """Test cases for fabric_run_pattern tool SSE response handling."""
 
     @pytest.fixture
     def server_instance(self) -> FabricMCP:
@@ -33,6 +33,10 @@ class TestFabricRunPatternBasicExecution:
         tools = getattr(server_instance, "_FabricMCP__tools")
         # fabric_run_pattern is the 3rd tool (index 2)
         return tools[2]
+
+
+class TestFabricRunPatternBasicExecution(TestFabricRunPatternFixtureBase):
+    """Test cases for basic fabric_run_pattern tool execution scenarios."""
 
     def test_successful_execution_with_basic_input(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -92,20 +96,8 @@ class TestFabricRunPatternBasicExecution:
             mock_api_client.close.assert_called_once()
 
 
-class TestFabricRunPatternErrorHandling:
+class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool error handling."""
-
-    @pytest.fixture
-    def server_instance(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP()
-
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
-        """Get the fabric_run_pattern tool from the server."""
-        tools = getattr(server_instance, "_FabricMCP__tools")
-        # fabric_run_pattern is the 3rd tool (index 2)
-        return tools[2]
 
     def test_network_connection_error(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -205,20 +197,8 @@ class TestFabricRunPatternErrorHandling:
             mock_api_client.close.assert_called_once()
 
 
-class TestFabricRunPatternInputValidation:
+class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool input validation and edge cases."""
-
-    @pytest.fixture
-    def server_instance(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP()
-
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
-        """Get the fabric_run_pattern tool from the server."""
-        tools = getattr(server_instance, "_FabricMCP__tools")
-        # fabric_run_pattern is the 3rd tool (index 2)
-        return tools[2]
 
     def test_empty_pattern_name_validation(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -284,13 +264,8 @@ class TestFabricRunPatternInputValidation:
             mock_api_client.close.assert_called_once()
 
 
-class TestFabricRunPatternModelInference:
+class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool model and vendor inference."""
-
-    @pytest.fixture
-    def server_instance(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP()
 
     @pytest.fixture
     def server_instance_no_defaults(self) -> FabricMCP:
@@ -463,19 +438,3 @@ class TestFabricRunPatternModelInference:
             payload = call_args[1]["json_data"]
             assert payload["prompts"][0]["model"] == "gpt-3.5-turbo"
             assert payload["prompts"][0]["vendor"] == "openai"
-
-
-class TestFabricRunPatternSSEHandling:
-    """Test cases for fabric_run_pattern tool SSE response handling."""
-
-    @pytest.fixture
-    def server_instance(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP()
-
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
-        """Get the fabric_run_pattern tool from the server."""
-        tools = getattr(server_instance, "_FabricMCP__tools")
-        # fabric_run_pattern is the 3rd tool (index 2)
-        return tools[2]
