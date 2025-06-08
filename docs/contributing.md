@@ -80,6 +80,7 @@ make dev           # Start FastMCP dev server with MCP inspector
 make mcp-inspector # Start standalone MCP inspector
 make build         # Build the project
 make clean         # Remove build/test artifacts
+make vulture       # Run the vulture tool (check for dead code)
 ```
 
 ## Code Style and Quality

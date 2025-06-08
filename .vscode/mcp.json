@@ -1,0 +1,10 @@
+{
+	"servers": {
+		"FabricMCP": {
+			"type": "stdio",
+			"command": "uv",
+			"args": ["run", "fabric-mcp", "--transport", "stdio"],
+			"cwd": "${workspaceFolder}"
+		}
+	}
+}

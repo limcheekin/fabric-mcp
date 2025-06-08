@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+"""Fail if any helper in tests/shared/ is unreachable from test code."""
+
+import ast
+import sys
+from collections import deque
+from pathlib import Path
+
+# --- Configuration ---
+ROOT = Path(__file__).resolve().parents[2]
+HELPERS_ROOT_DIR = "tests"
+HELPERS_SHARED_DIR_NAME = "shared"
+SHARED_DIR = ROOT / HELPERS_ROOT_DIR / HELPERS_SHARED_DIR_NAME
+HELPERS_PREFIX = f"{HELPERS_ROOT_DIR}.{HELPERS_SHARED_DIR_NAME}"
+
+
+class HelperImportVisitor(ast.NodeVisitor):
+    """Extracts helper dependencies from a Python file's AST."""
+
+    def __init__(self, known_helpers: set[str]):
+        self.deps: set[str] = set()
+        self.known_helpers = known_helpers
+
+    def visit_Import(self, node: ast.Import) -> None:  # pylint: disable=invalid-name
+        """Visit `import tests.shared.foo`."""
+        prefix_dot = f"{HELPERS_PREFIX}."
+        for alias in node.names:
+            if alias.name.startswith(prefix_dot):
+                target = alias.name[len(prefix_dot) :]
+                if target in self.known_helpers:
+                    self.deps.add(target)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # pylint: disable=invalid-name
+        """Visit `from tests.shared import foo` or `from ..shared import bar`."""
+        # Absolute import: from tests.shared.module import ...
+        if node.level == 0 and node.module and node.module.startswith(HELPERS_PREFIX):
+            # If `from tests.shared.foo ...`, base_module is "foo"
+            # If `from tests.shared ...`, base_module is ""
+            base_module = (
+                node.module[len(HELPERS_PREFIX) + 1 :]
+                if node.module != HELPERS_PREFIX
+                else ""
+            )
+
+            if base_module and base_module in self.known_helpers:
+                self.deps.add(base_module)
+
+            for alias in node.names:
+                if alias.name == "*":
+                    self.deps.update(self.known_helpers)
+                    return
+
+                target = f"{base_module}.{alias.name}" if base_module else alias.name
+                if target in self.known_helpers:
+                    self.deps.add(target)
+
+        # Relative import from a sibling directory: from ..shared import ...
+        elif node.level > 0 and node.module == HELPERS_SHARED_DIR_NAME:
+            for alias in node.names:
+                if alias.name in self.known_helpers:
+                    self.deps.add(alias.name)
+
+
+def get_dependencies(file_path: Path, known_helpers: set[str]) -> set[str]:
+    """Get helper dependencies by visiting a Python file's AST."""
+    try:
+        tree = ast.parse(file_path.read_text(), filename=str(file_path))
+        visitor = HelperImportVisitor(known_helpers)
+        visitor.visit(tree)
+        return visitor.deps
+    except SyntaxError:
+        return set()
+
+
+# 1. Collect all helpers as dotted paths (e.g., "utils.network").
+helpers = {
+    py.relative_to(SHARED_DIR).with_suffix("").as_posix().replace("/", ".")
+    for py in SHARED_DIR.rglob("*.py")
+    if py.stem != "__init__"
+}
+
+if not helpers:
+    print("✅ No shared helpers found to check.")
+    sys.exit(0)
+
+# 2. Build dependency graph: helper -> set of helpers it depends on.
+helper_deps = {
+    h: get_dependencies(SHARED_DIR / f"{h.replace('.', '/')}.py", helpers)
+    for h in helpers
+}
+
+# 3. Find helpers directly imported by test files (the entry points).
+test_roots: set[str] = set()
+for test_file in (ROOT / HELPERS_ROOT_DIR).glob("**/*.py"):
+    # Exclude files within the shared directory itself from being entry points
+    if SHARED_DIR not in test_file.parents and test_file.parent != SHARED_DIR:
+        test_roots.update(get_dependencies(test_file, helpers))
+
+# 4. Find all reachable helpers using Breadth-First Search (BFS).
+reachable: set[str] = set(test_roots)
+queue = deque(test_roots)
+while queue:
+    current = queue.popleft()
+    for dep in helper_deps.get(current, set()):
+        if dep not in reachable:
+            reachable.add(dep)
+            queue.append(dep)
+
+# 5. Report unused helpers.
+unused = sorted(helpers - reachable)
+if unused:
+    print("❌ Unused helpers found:")
+    for name in unused:
+        helper_path = SHARED_DIR / f"{name.replace('.', '/')}.py"
+        print(
+            f"  - {helper_path.relative_to(ROOT.parent)}"
+        )  # Print path relative to project root
+    sys.exit(1)
+
+print("✅ All shared helpers are reachable from tests.")

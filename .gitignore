@@ -198,7 +198,7 @@ node_modules/
 .cursor
 
 # As well as the generated PRD
-scripts
+scripts/*
 
 # Logs
 logs

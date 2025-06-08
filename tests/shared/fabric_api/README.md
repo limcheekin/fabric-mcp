@@ -71,7 +71,7 @@ Executes a pattern with input text.
 {
   "output_format": "text",
   "output_text": "Mock analyze_claims output for input: Text to process...",
-  "model_used": "gpt-4",
+  "model_used": "gpt-4o",
   "tokens_used": 150,
   "execution_time_ms": 1250
 }

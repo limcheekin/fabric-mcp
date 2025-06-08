@@ -136,6 +136,7 @@ Contributors will primarily interact with the following tools, largely configure
 | `pylint` | Linting (additional checks) | `make lint` (`uv run pylint`) | `pyproject.toml` (or `.pylintrc`) |
 | `pytest` | Automated Testing | `make test` (`uv run pytest`) | `pyproject.toml` |
 | `pyright` | Static Type Checking | `make lint` (`uv run pyright`) | `pyproject.toml` |
+| `vulture` | Check for dead code, unused variables/functions | `make vulture` (`uv run vulture`) | `pyproject.toml` |
 
 This table offers a consolidated summary, helping contributors quickly identify the main tools, their functions, common commands, and their configuration sources.
 

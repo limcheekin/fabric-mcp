@@ -11,14 +11,13 @@ import signal
 import time
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
+from types import TracebackType
 
 import pytest
 import uvicorn
 
 from ..port_utils import find_free_port, is_port_in_use
-
-# Backward compatibility alias
-get_random_port = find_free_port
+from .server import app
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +37,6 @@ def wait_for_server(host: str, port: int, timeout: float = 10.0) -> bool:
 
 def run_mock_server_process(host: str, port: int) -> None:
     """Run the mock server in a separate process."""
-    # Import here to avoid circular imports
-    from .server import (  # type: ignore[attr-defined]  # pylint: disable=import-outside-toplevel
-        app,
-    )
 
     # Configure logging for the subprocess
     logging.basicConfig(
@@ -137,7 +132,12 @@ class MockFabricAPIServer:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # type: ignore[misc]
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: TracebackType | None,
+    ) -> None:
         """Context manager exit."""
         self.stop()
 
