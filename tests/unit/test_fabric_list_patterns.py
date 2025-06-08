@@ -117,7 +117,7 @@ class TestFabricListPatterns:
 
         # Act
         with mock_fabric_api_client(builder) as mock_client:
-            with patch("fabric_mcp.core.logging") as mock_logging:
+            with patch.object(self.server, "logger") as mock_logging:
                 result = self.fabric_list_patterns()
 
         # Assert

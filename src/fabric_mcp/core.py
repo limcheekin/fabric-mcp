@@ -143,7 +143,7 @@ class FabricMCP(FastMCP[None]):
                     item_type = (
                         type(item_any).__name__ if item_any is not None else "None"
                     )
-                    logging.warning("Non-string pattern name found: %s", item_type)
+                    self.logger.warning("Non-string pattern name found: %s", item_type)
 
             return validated_patterns
 
@@ -174,7 +174,7 @@ class FabricMCP(FastMCP[None]):
         def fabric_run_pattern(
             pattern_name: str,
             input_text: str = "",
-            stream: bool = False,  # pylint: disable=unused-argument
+            stream: bool = False,  # Will be used later; pylint: disable=unused-argument
             config: PatternExecutionConfig | None = None,
         ) -> dict[Any, Any]:
             """

@@ -5,6 +5,8 @@ from typing import Any
 from unittest.mock import MagicMock, Mock
 
 import httpx
+import pytest
+from mcp import McpError
 
 
 class FabricApiMockBuilder:
@@ -179,8 +181,6 @@ def assert_connection_error_test(
         test_function: The function to test (e.g., fabric_list_patterns)
         error_message_contains: Expected substring in error message
     """
-    import pytest  # pylint: disable=import-outside-toplevel
-    from mcp import McpError  # pylint: disable=import-outside-toplevel
 
     # Arrange
     create_fabric_api_mock(mock_api_client_class).with_connection_error(
@@ -204,8 +204,6 @@ def assert_unexpected_error_test(
         test_function: The function to test
         error_message_contains: Expected substring in error message
     """
-    import pytest  # pylint: disable=import-outside-toplevel
-    from mcp import McpError  # pylint: disable=import-outside-toplevel
 
     # Arrange
     create_fabric_api_mock(mock_api_client_class).with_unexpected_error(
