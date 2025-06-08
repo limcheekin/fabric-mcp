@@ -141,7 +141,7 @@ vulture:
 	@echo "Checking for unused files in tests/shared/*.py files..."
 	@unused_files=""; \
 	for file in $(TESTS_PATH)/shared/*.py; do \
-		if [ "$$(basename $$file)" == "__init__.py" ]; then \
+		if [ "$$(basename $$file)" = "__init__.py" ]; then \
 			continue; \
 		fi; \
 		if ! grep -r -q "from.*\\.$$(basename $$file .py)" $(TESTS_PATH); then \
@@ -149,7 +149,7 @@ vulture:
 		fi \
 	done; \
 	if [ -n "$$unused_files" ]; then \
-		echo "Error: Unused files (never imported) found in $(TESTS_PATH)/shared/: $$unused_files"; \
+		echo "Error: Unused files (never imported) found in $(TESTS_PATH)/shared/:$$unused_files"; \
 		echo "Please remove them or ensure they are imported in your tests."; \
 		exit 1; \
 	fi
