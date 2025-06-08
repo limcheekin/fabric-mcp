@@ -1,8 +1,7 @@
 """Unit tests for the config module."""
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 from fabric_mcp.config import get_default_model, get_fabric_env_path, load_fabric_env
 
@@ -31,12 +30,10 @@ class TestLoadFabricEnv:
 
     @patch("fabric_mcp.config.Path.home")
     @patch("fabric_mcp.config.load_dotenv")
-    @patch("fabric_mcp.config.Path.open")
     @patch("fabric_mcp.config.Path.exists")
     def test_successful_load(
         self,
         mock_exists: MagicMock,
-        mock_open_file: MagicMock,
         mock_load_dotenv: MagicMock,
         mock_home: MagicMock,
     ):
@@ -46,18 +43,10 @@ class TestLoadFabricEnv:
         mock_exists.return_value = True
         mock_load_dotenv.return_value = True
 
-        # Mock file content
-        mock_file_content = "DEFAULT_MODEL=gpt-4\nDEFAULT_VENDOR=openai\n# comment\n"
-        mock_open_file.return_value = mock_open(
-            read_data=mock_file_content
-        ).return_value
+        result = load_fabric_env()
 
-        # Mock environment variables
-        env_vars = {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
-        with patch.dict(os.environ, env_vars):
-            result = load_fabric_env()
-
-        assert result == {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
+        assert result is True
+        mock_load_dotenv.assert_called_once()
 
     @patch("fabric_mcp.config.Path.home")
     @patch("fabric_mcp.config.load_dotenv")
@@ -83,75 +72,7 @@ class TestLoadFabricEnv:
 
         result = load_fabric_env()
 
-        assert not result
-
-    @patch("fabric_mcp.config.Path.home")
-    @patch("fabric_mcp.config.load_dotenv")
-    @patch("fabric_mcp.config.Path.open")
-    @patch("fabric_mcp.config.Path.exists")
-    def test_malformed_line_handling(
-        self,
-        mock_exists: MagicMock,
-        mock_open_file: MagicMock,
-        mock_load_dotenv: MagicMock,
-        mock_home: MagicMock,
-    ):
-        """Test handling of malformed lines in .env file."""
-        mock_home.return_value = Path("/mock/home")
-        mock_exists.return_value = True
-        mock_load_dotenv.return_value = True
-
-        # Mock file content with malformed line
-        mock_file_content = (
-            "DEFAULT_MODEL=gpt-4\n"
-            "malformed_line_without_equals\n"
-            "DEFAULT_VENDOR=openai\n"
-        )
-        mock_open_file.return_value = mock_open(
-            read_data=mock_file_content
-        ).return_value
-
-        env_vars = {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
-        with patch.dict(os.environ, env_vars):
-            result = load_fabric_env()
-
-        # Should still get valid variables despite malformed line
-        assert result == {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
-
-    @patch("fabric_mcp.config.Path.home")
-    @patch("fabric_mcp.config.load_dotenv")
-    @patch("fabric_mcp.config.Path.open")
-    @patch("fabric_mcp.config.Path.exists")
-    def test_empty_and_comment_lines(
-        self,
-        mock_exists: MagicMock,
-        mock_open_file: MagicMock,
-        mock_load_dotenv: MagicMock,
-        mock_home: MagicMock,
-    ):
-        """Test handling of empty lines and comments."""
-        mock_home.return_value = Path("/mock/home")
-        mock_exists.return_value = True
-        mock_load_dotenv.return_value = True
-
-        # Mock file content with empty lines and comments
-        mock_file_content = """
-# This is a comment
-DEFAULT_MODEL=gpt-4
-
-# Another comment
-DEFAULT_VENDOR=openai
-
-"""
-        mock_open_file.return_value = mock_open(
-            read_data=mock_file_content
-        ).return_value
-
-        env_vars = {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
-        with patch.dict(os.environ, env_vars):
-            result = load_fabric_env()
-
-        assert result == {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
+        assert result is False
 
 
 class TestGetDefaultModel:
@@ -160,52 +81,57 @@ class TestGetDefaultModel:
     @patch("fabric_mcp.config.load_fabric_env")
     def test_both_values_present(self, mock_load_env: MagicMock):
         """Test when both DEFAULT_MODEL and DEFAULT_VENDOR are present."""
-        mock_load_env.return_value = {
-            "DEFAULT_MODEL": "gpt-4",
-            "DEFAULT_VENDOR": "openai",
-        }
+        env_vars = {"DEFAULT_MODEL": "gpt-4", "DEFAULT_VENDOR": "openai"}
 
-        model, vendor = get_default_model()
+        with patch.dict("os.environ", env_vars):
+            model, vendor = get_default_model()
 
         assert model == "gpt-4"
         assert vendor == "openai"
+        mock_load_env.assert_called_once()
 
     @patch("fabric_mcp.config.load_fabric_env")
     def test_only_model_present(self, mock_load_env: MagicMock):
         """Test when only DEFAULT_MODEL is present."""
-        mock_load_env.return_value = {"DEFAULT_MODEL": "gpt-4"}
+        env_vars = {"DEFAULT_MODEL": "gpt-4"}
 
-        model, vendor = get_default_model()
+        with patch.dict("os.environ", env_vars, clear=True):
+            model, vendor = get_default_model()
 
         assert model == "gpt-4"
         assert vendor is None
+        mock_load_env.assert_called_once()
 
     @patch("fabric_mcp.config.load_fabric_env")
     def test_only_vendor_present(self, mock_load_env: MagicMock):
         """Test when only DEFAULT_VENDOR is present."""
-        mock_load_env.return_value = {"DEFAULT_VENDOR": "anthropic"}
+        env_vars = {"DEFAULT_VENDOR": "anthropic"}
 
-        model, vendor = get_default_model()
+        with patch.dict("os.environ", env_vars, clear=True):
+            model, vendor = get_default_model()
 
         assert model is None
         assert vendor == "anthropic"
+        mock_load_env.assert_called_once()
 
     @patch("fabric_mcp.config.load_fabric_env")
     def test_neither_present(self, mock_load_env: MagicMock):
         """Test when neither DEFAULT_MODEL nor DEFAULT_VENDOR are present."""
-        mock_load_env.return_value = {}
-
-        model, vendor = get_default_model()
+        with patch.dict("os.environ", {}, clear=True):
+            model, vendor = get_default_model()
 
         assert model is None
         assert vendor is None
+        mock_load_env.assert_called_once()
 
     @patch("fabric_mcp.config.load_fabric_env")
     def test_empty_values(self, mock_load_env: MagicMock):
         """Test when DEFAULT_MODEL and DEFAULT_VENDOR are empty strings."""
-        mock_load_env.return_value = {"DEFAULT_MODEL": "", "DEFAULT_VENDOR": ""}
+        env_vars = {"DEFAULT_MODEL": "", "DEFAULT_VENDOR": ""}
 
-        model, vendor = get_default_model()
+        with patch.dict("os.environ", env_vars, clear=True):
+            model, vendor = get_default_model()
 
         assert model is None
         assert vendor is None
+        mock_load_env.assert_called_once()
