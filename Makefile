@@ -141,7 +141,7 @@ vulture:
 	@echo "Checking for unused files in tests/shared/*.py files..."
 	@unused_files=""; \
 	for file in $(TESTS_PATH)/shared/*.py; do \
-		if [ "$$file" == *"__init__.py" ]; then \
+		if [ "$$(basename $$file)" == "__init__.py" ]; then \
 			continue; \
 		fi; \
 		if ! grep -r -q "from.*\\.$$(basename $$file .py)" $(TESTS_PATH); then \
