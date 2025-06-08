@@ -15,6 +15,7 @@
 		"delenv",
 		"Dockerization",
 		"docstrings",
+		"dotenv",
 		"elif",
 		"excinfo",
 		"fastapi",

@@ -5,7 +5,7 @@
 	coverage-show dev format help lint mcp-inspector merge tag \
 	test test-fast test-serial vulture
 
-COVERAGE_FAIL_UNDER := 90
+COVERAGE_FAIL_UNDER := 95
 PACKAGE_PATH := src/fabric_mcp
 TESTS_PATH := tests
 
