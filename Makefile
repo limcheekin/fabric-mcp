@@ -21,7 +21,7 @@ VERSION := $(shell uv run hatch version)
 __default: help
 
 _check_unused:
-	uv run python tests/scripts/check_shared_utils.py
+	uv run python tests/scripts/check_shared_utils
 
 bootstrap:
 	uv sync --dev
