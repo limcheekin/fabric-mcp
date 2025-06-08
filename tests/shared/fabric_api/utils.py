@@ -37,7 +37,6 @@ def wait_for_server(host: str, port: int, timeout: float = 10.0) -> bool:
 
 def run_mock_server_process(host: str, port: int) -> None:
     """Run the mock server in a separate process."""
-    # Import here to avoid circular imports
 
     # Configure logging for the subprocess
     logging.basicConfig(

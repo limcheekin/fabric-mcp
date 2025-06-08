@@ -5,6 +5,7 @@ for integration testing purposes. It serves the same endpoints that the real Fab
 API would serve, but with predictable mock data.
 """
 
+import argparse
 import json
 import logging
 import signal
@@ -342,8 +343,6 @@ def run_server(host: str = "127.0.0.1", port: int = 8080):
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Mock Fabric API Server")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
