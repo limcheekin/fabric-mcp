@@ -1,92 +1,101 @@
 #!/usr/bin/env python
-"""Find unused files in tests/shared/ directory."""
+"""Fail if any helper in tests/shared/ is unreachable from test code."""
 
-import re
+import ast
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+SHARED_DIR = ROOT / "tests" / "shared"
 
-def find_python_files(
-    directory: Path, exclude_dirs: set[str] | None = None
-) -> list[Path]:
-    """Find all Python files, excluding specified directories."""
-    if exclude_dirs is None:
-        exclude_dirs = {"__pycache__"}
+# Collect all helpers as dotted paths
+helpers = {
+    py.relative_to(SHARED_DIR).with_suffix("").as_posix().replace("/", ".")
+    for py in SHARED_DIR.rglob("*.py")
+    if py.stem != "__init__"
+}
 
-    return [
-        path
-        for path in directory.rglob("*.py")
-        if path.name != "__init__.py"
-        and not any(part in exclude_dirs for part in path.parts)
-    ]
+if not helpers:
+    sys.exit(0)
 
 
-def extract_shared_imports(file_path: Path) -> set[str]:
-    """Extract all imports that reference tests.shared modules."""
+class ImportVisitor(ast.NodeVisitor):
+    """Extract helper dependencies from import statements."""
+
+    def __init__(self):
+        self.deps: set[str] = set()
+
+    def visit_Import(self, node: ast.Import) -> None:  # pylint: disable=invalid-name
+        "Visit import statements and collect dependencies."
+        for alias in node.names:
+            if alias.name.startswith("tests.shared."):
+                target = alias.name[13:]  # len("tests.shared.")
+                if target in helpers:
+                    self.deps.add(target)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # pylint: disable=invalid-name
+        "Visit import statements and collect dependencies."
+        # Absolute imports: from tests.shared[.module] import ...
+        if node.level == 0 and node.module and node.module.startswith("tests.shared"):
+            prefix = node.module[13:] if node.module != "tests.shared" else ""
+
+            if prefix and prefix in helpers:
+                self.deps.add(prefix)
+
+            for alias in node.names:
+                if alias.name == "*":
+                    self.deps.update(helpers)
+                else:
+                    target = f"{prefix}.{alias.name}".lstrip(".")
+                    if target in helpers:
+                        self.deps.add(target)
+
+        # Relative imports: from ..shared import ...
+        elif node.level and node.module == "shared":
+            for alias in node.names:
+                if alias.name in helpers:
+                    self.deps.add(alias.name)
+
+
+def get_dependencies(file_path: Path) -> set[str]:
+    """Get helper dependencies from a Python file."""
     try:
-        content = file_path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, PermissionError):
+        tree = ast.parse(file_path.read_text())
+        visitor = ImportVisitor()
+        visitor.visit(tree)
+        return visitor.deps
+    except SyntaxError:
         return set()
 
-    patterns = [
-        r"from\s+tests\.shared\.([a-zA-Z_][a-zA-Z0-9_.]*)\s+import",
-        r"import\s+tests\.shared\.([a-zA-Z_][a-zA-Z0-9_.]*)",
-        r"from\s+\.\.shared\.([a-zA-Z_][a-zA-Z0-9_.]*)\s+import",
-        r"from\s+\.shared\.([a-zA-Z_][a-zA-Z0-9_.]*)\s+import",
-    ]
 
-    imports: set[str] = set()
-    for line in content.splitlines():
-        if not line.strip().startswith("#"):
-            for pattern in patterns:
-                imports.update(re.findall(pattern, line))
+# Build dependency graph: helper -> set of helpers it depends on
+helper_deps = {
+    h: get_dependencies(SHARED_DIR / f"{h.replace('.', '/')}.py") for h in helpers
+}
 
-    return imports
+# Find helpers directly imported by test files
+test_roots: set[str] = set()
+for test_file in ROOT.glob("tests/**/*.py"):
+    if SHARED_DIR not in test_file.parents:
+        test_roots.update(get_dependencies(test_file))
 
+# Find all reachable helpers via BFS
+reachable = set(test_roots)
+queue = list(test_roots)
+while queue:
+    current = queue.pop(0)
+    for dep in helper_deps.get(current, set()):
+        if dep not in reachable:
+            reachable.add(dep)
+            queue.append(dep)
 
-def main() -> None:
-    """Find unused files in tests/shared/."""
-    project_root = Path(__file__).parent.parent.parent
-    shared_dir = project_root / "tests" / "shared"
+# Report results
+unused = sorted(helpers - reachable)
+if unused:
+    print("❌ Unused helpers:")
+    for name in unused:
+        helper_path = SHARED_DIR / f"{name.replace('.', '/')}.py"
+        print(f"  - {helper_path}")
+    sys.exit(1)
 
-    if not shared_dir.exists():
-        print(f"Directory {shared_dir} does not exist")
-        return
-
-    # Collect all shared imports from test files
-    test_files = find_python_files(
-        project_root / "tests", {"__pycache__", "shared", "scripts"}
-    )
-
-    all_imports: set[str] = set()
-    for test_file in test_files:
-        all_imports.update(extract_shared_imports(test_file))
-
-    # Find unused shared files
-    shared_files = find_python_files(shared_dir)
-    unused_files: list[tuple[Path, str]] = []
-
-    for file_path in shared_files:
-        import_name = (
-            file_path.relative_to(shared_dir)
-            .with_suffix("")
-            .as_posix()
-            .replace("/", ".")
-        )
-        if import_name not in all_imports:
-            unused_files.append((file_path, import_name))
-
-    # Report results
-    if unused_files:
-        print("Unused files in tests/shared/:")
-        for file_path, import_name in unused_files:
-            rel_path = file_path.relative_to(project_root)
-            print(f"  - {rel_path} (import: {import_name})")
-        print(f"\nFound {len(unused_files)} unused file(s)")
-        sys.exit(1)
-    else:
-        print("All files in tests/shared/ are being used")
-
-
-if __name__ == "__main__":
-    main()
+print("✅ All helpers reachable from tests.")
