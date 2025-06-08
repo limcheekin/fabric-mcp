@@ -197,7 +197,7 @@ class FabricApiMockBuilder:
         Returns:
             Self for method chaining
         """
-        connection_error = httpx.RequestError(error_message)
+        connection_error = httpx.ConnectError(error_message)
         self.mock_api_client.get.side_effect = connection_error
         self.mock_api_client.post.side_effect = connection_error
         return self
@@ -249,6 +249,101 @@ class FabricApiMockBuilder:
         """
         self.mock_api_client.get.side_effect = error
         self.mock_api_client.post.side_effect = error
+        return self
+
+    def with_500_error_pattern_not_found(
+        self, _pattern_name: str, error_message: str
+    ) -> "FabricApiMockBuilder":
+        """Configure mock to raise 500 error for pattern not found scenario.
+
+        Args:
+            pattern_name: Name of the pattern that was not found
+            error_message: Error message containing pattern not found details
+
+        Returns:
+            Self for method chaining
+        """
+        mock_request = Mock()
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = error_message
+        mock_response.reason_phrase = "Internal Server Error"
+
+        http_error = httpx.HTTPStatusError(
+            "HTTP 500", request=mock_request, response=mock_response
+        )
+        self.mock_api_client.post.side_effect = http_error
+        return self
+
+    def with_500_error_generic(
+        self, error_message: str = "Internal Server Error"
+    ) -> "FabricApiMockBuilder":
+        """Configure mock to raise a generic 500 HTTP error.
+
+        Args:
+            error_message: Error message for the 500 response
+
+        Returns:
+            Self for method chaining
+        """
+        mock_request = Mock()
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = error_message
+        mock_response.reason_phrase = "Internal Server Error"
+
+        http_error = httpx.HTTPStatusError(
+            "HTTP 500", request=mock_request, response=mock_response
+        )
+        self.mock_api_client.post.side_effect = http_error
+        return self
+
+    def with_404_error(
+        self, error_message: str = "Not Found"
+    ) -> "FabricApiMockBuilder":
+        """Configure mock to raise 404 error.
+
+        Args:
+            error_message: Error message for the 404 response
+
+        Returns:
+            Self for method chaining
+        """
+        mock_request = Mock()
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.text = error_message
+        mock_response.reason_phrase = "Not Found"
+
+        http_error = httpx.HTTPStatusError(
+            "HTTP 404", request=mock_request, response=mock_response
+        )
+        self.mock_api_client.get.side_effect = http_error
+        self.mock_api_client.post.side_effect = http_error
+        return self
+
+    def with_403_error(
+        self, error_message: str = "Forbidden"
+    ) -> "FabricApiMockBuilder":
+        """Configure mock to raise 403 error.
+
+        Args:
+            error_message: Error message for the 403 response
+
+        Returns:
+            Self for method chaining
+        """
+        mock_request = Mock()
+        mock_response = Mock()
+        mock_response.status_code = 403
+        mock_response.text = error_message
+        mock_response.reason_phrase = "Forbidden"
+
+        http_error = httpx.HTTPStatusError(
+            "HTTP 403", request=mock_request, response=mock_response
+        )
+        self.mock_api_client.get.side_effect = http_error
+        self.mock_api_client.post.side_effect = http_error
         return self
 
     def build(self) -> Mock:

@@ -236,7 +236,35 @@ class FabricMCP(FastMCP[None]):
             """
             try:
                 return self._execute_fabric_pattern(pattern_name, input_text, config)
-            except (ConnectionError, RuntimeError, ValueError) as e:
+            except RuntimeError as e:
+                error_message = str(e)
+                # Check for pattern not found (500 with file not found message)
+                if (
+                    "Fabric API returned error 500" in error_message
+                    and "no such file or directory" in error_message
+                ):
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params - pattern doesn't exist
+                            message=f"Pattern '{pattern_name}' not found",
+                        )
+                    ) from e
+                # Check for other HTTP status errors
+                if "Fabric API returned error" in error_message:
+                    raise McpError(
+                        ErrorData(
+                            code=-32603,  # Internal error
+                            message=f"Error executing pattern '{pattern_name}': {e}",
+                        )
+                    ) from e
+                # Other runtime errors
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=f"Error executing pattern '{pattern_name}': {e}",
+                    )
+                ) from e
+            except ConnectionError as e:
                 raise McpError(
                     ErrorData(
                         code=-32603,  # Internal error

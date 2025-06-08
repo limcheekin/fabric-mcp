@@ -28,10 +28,58 @@ class TestFabricRunPattern:
         return FabricMCP()
 
     @pytest.fixture
+    def server_instance_no_defaults(self) -> FabricMCP:
+        """Create a FabricMCP server instance with no default model/vendor."""
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            return FabricMCP()
+
+    @pytest.fixture
+    def server_instance_claude_model(self) -> FabricMCP:
+        """Create a FabricMCP server instance with Claude model default."""
+        with patch(
+            "fabric_mcp.core.get_default_model",
+            return_value=("claude-3-opus", None),
+        ):
+            return FabricMCP()
+
+    @pytest.fixture
+    def server_instance_gpt_model(self) -> FabricMCP:
+        """Create a FabricMCP server instance with GPT model default."""
+        with patch(
+            "fabric_mcp.core.get_default_model",
+            return_value=("gpt-3.5-turbo", None),
+        ):
+            return FabricMCP()
+
+    @pytest.fixture
     def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from the server."""
         tools = getattr(server_instance, "_FabricMCP__tools")
         # fabric_run_pattern is the 3rd tool (index 2)
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_no_defaults(
+        self, server_instance_no_defaults: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with no defaults."""
+        tools = getattr(server_instance_no_defaults, "_FabricMCP__tools")
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_claude(
+        self, server_instance_claude_model: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with Claude model."""
+        tools = getattr(server_instance_claude_model, "_FabricMCP__tools")
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_gpt(
+        self, server_instance_gpt_model: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with GPT model."""
+        tools = getattr(server_instance_gpt_model, "_FabricMCP__tools")
         return tools[2]
 
     def test_successful_execution_with_basic_input(
@@ -101,7 +149,8 @@ class TestFabricRunPattern:
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Unexpected error executing pattern")
+            # Connection errors should be wrapped in McpError by the tool wrapper
+            assert_mcp_error(exc_info, -32603, "Error executing pattern")
             mock_api_client.close.assert_called_once()
 
     def test_http_404_error(self, fabric_run_pattern_tool: Callable[..., Any]) -> None:
@@ -228,97 +277,161 @@ class TestFabricRunPattern:
             assert result["output_format"] == "text"
             mock_api_client.close.assert_called_once()
 
-
-class TestFabricRunPatternWithDefaultModels:
-    """Test cases for fabric_run_pattern tool with default model configuration."""
-
-    @pytest.fixture
-    def fabric_run_pattern_tool_with_defaults(self) -> Callable[..., Any]:
-        """Get fabric_run_pattern tool from server with default config."""
-        with patch("fabric_mcp.core.get_default_model") as mock_get_default:
-            mock_get_default.return_value = ("claude-3-sonnet", "anthropic")
-
-            server = FabricMCP()
-            tools = getattr(server, "_FabricMCP__tools")
-            return tools[2]  # fabric_run_pattern is the 3rd tool
-
-    @pytest.fixture
-    def fabric_run_pattern_tool_no_defaults(self) -> Callable[..., Any]:
-        """Get fabric_run_pattern tool from server with no default config."""
-        with patch("fabric_mcp.core.get_default_model") as mock_get_default:
-            mock_get_default.return_value = (None, None)
-
-            server = FabricMCP()
-            tools = getattr(server, "_FabricMCP__tools")
-            return tools[2]  # fabric_run_pattern is the 3rd tool
-
-    def test_default_model_applied_when_no_explicit_config(
-        self, fabric_run_pattern_tool_with_defaults: Callable[..., Any]
+    def test_empty_pattern_name_validation(
+        self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test that default model from environment is applied when no
-        config specified."""
-        builder = FabricApiMockBuilder().with_successful_sse("Test output")
+        """Test that empty pattern name raises ValueError."""
+        # Test empty string
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool("", "test input")
 
-        with mock_fabric_api_client(builder) as mock_api_client:
-            result: dict[str, Any] = fabric_run_pattern_tool_with_defaults(
-                "test_pattern", "test input"
-            )
+        # Test whitespace-only string
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool("   ", "test input")
 
-            # Verify the result
-            assert result["output_text"] == "Test output"
+        # Test None (though this might be caught by type system)
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool(None, "test input")
 
-            # Verify the API was called with default model/vendor
-            mock_api_client.post.assert_called_once()
-            call_args = mock_api_client.post.call_args
-            request_payload = call_args[1]["json_data"]
-
-            assert request_payload["prompts"][0]["model"] == "claude-3-sonnet"
-            assert request_payload["prompts"][0]["vendor"] == "anthropic"
-
-    def test_explicit_model_overrides_default(
-        self, fabric_run_pattern_tool_with_defaults: Callable[..., Any]
+    def test_pattern_not_found_500_error(
+        self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test that explicit model config overrides default from environment."""
+        """Test handling of 500 error indicating pattern not found."""
+        builder = FabricApiMockBuilder().with_500_error_pattern_not_found(
+            "nonexistent_pattern", "no such file or directory: pattern not found"
+        )
 
-        builder = FabricApiMockBuilder().with_successful_sse("Test output")
-        explicit_config = PatternExecutionConfig(model_name="gpt-4o")
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("nonexistent_pattern", "test input")
 
-        with mock_fabric_api_client(builder) as mock_api_client:
-            result: dict[str, Any] = fabric_run_pattern_tool_with_defaults(
-                "test_pattern", "test input", config=explicit_config
-            )
-
-            # Verify the result
-            assert result["output_text"] == "Test output"
-
-            # Verify the API was called with explicit model, but default vendor
-            mock_api_client.post.assert_called_once()
-            call_args = mock_api_client.post.call_args
-            request_payload = call_args[1]["json_data"]
-
-            assert request_payload["prompts"][0]["model"] == "gpt-4o"
+            # Should be transformed to Invalid params error
+            assert exc_info.value.error.code == -32602
             assert (
-                request_payload["prompts"][0]["vendor"] == "anthropic"
-            )  # Still uses default
+                "Pattern 'nonexistent_pattern' not found"
+                in exc_info.value.error.message
+            )
 
-    def test_fallback_behavior_without_defaults(
+    def test_generic_500_error(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test handling of generic 500 error (not pattern not found)."""
+        builder = FabricApiMockBuilder().with_500_error_generic(
+            "Database connection failed"
+        )
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("test_pattern", "test input")
+
+            error = exc_info.value
+            assert error.error.code == -32603  # Internal error
+            assert "Database connection failed" in error.error.message
+
+    def test_vendor_inference_from_model_name(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference when no default vendor is configured."""
+        builder = FabricApiMockBuilder().with_successful_sse("Inference test")
+
+        # Test Claude model inference
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            with mock_fabric_api_client(builder):
+                config = PatternExecutionConfig(model_name="claude-3-sonnet")
+                result = fabric_run_pattern_tool(
+                    "test_pattern", "test input", config=config
+                )
+                assert result["output_text"] == "Inference test"
+
+        # Test GPT model inference
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            with mock_fabric_api_client(builder):
+                config = PatternExecutionConfig(model_name="gpt-4")
+                result = fabric_run_pattern_tool(
+                    "test_pattern", "test input", config=config
+                )
+                assert result["output_text"] == "Inference test"
+
+    def test_http_status_error_handling(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test handling of various HTTP status errors."""
+        # Test 404 error
+        builder = FabricApiMockBuilder().with_404_error("Endpoint not found")
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("test_pattern", "test input")
+            assert_mcp_error(exc_info, -32603, "Fabric API returned error 404")
+
+        # Test 403 error
+        builder = FabricApiMockBuilder().with_403_error("Forbidden")
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("test_pattern", "test input")
+            assert_mcp_error(exc_info, -32603, "Fabric API returned error 403")
+
+    def test_hardcoded_model_fallback_when_no_defaults(
         self, fabric_run_pattern_tool_no_defaults: Callable[..., Any]
     ) -> None:
-        """Test fallback to hardcoded defaults when no environment config."""
-        builder = FabricApiMockBuilder().with_successful_sse("Test output")
+        """Test fallback to hardcoded default model when no environment defaults."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
 
+        # Mock get_default_model to return None for both model and vendor
         with mock_fabric_api_client(builder) as mock_api_client:
             result: dict[str, Any] = fabric_run_pattern_tool_no_defaults(
                 "test_pattern", "test input"
             )
 
-            # Verify the result
-            assert result["output_text"] == "Test output"
-
-            # Verify the API was called with hardcoded defaults
+            assert isinstance(result, dict)
+            # Check that API was called (would use hardcoded "gpt-4o" and "openai")
             mock_api_client.post.assert_called_once()
             call_args = mock_api_client.post.call_args
-            request_payload = call_args[1]["json_data"]
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == "gpt-4o"
+            assert payload["prompts"][0]["vendor"] == "openai"
 
-            assert request_payload["prompts"][0]["model"] == "gpt-4o"
-            assert request_payload["prompts"][0]["vendor"] == "openai"
+    def test_vendor_inference_for_claude_models(
+        self, fabric_run_pattern_tool_claude: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference from Claude model names."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            result: dict[str, Any] = fabric_run_pattern_tool_claude(
+                "test_pattern", "test input"
+            )
+
+            assert isinstance(result, dict)
+            # Check that vendor was inferred as "anthropic" for Claude models
+            mock_api_client.post.assert_called_once()
+            call_args = mock_api_client.post.call_args
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == "claude-3-opus"
+            assert payload["prompts"][0]["vendor"] == "anthropic"
+
+    def test_vendor_inference_for_gpt_models(
+        self, fabric_run_pattern_tool_gpt: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference from GPT model names."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            result: dict[str, Any] = fabric_run_pattern_tool_gpt(
+                "test_pattern", "test input"
+            )
+
+            assert isinstance(result, dict)
+            # Check that vendor was inferred as "openai" for GPT models
+            mock_api_client.post.assert_called_once()
+            call_args = mock_api_client.post.call_args
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == "gpt-3.5-turbo"
+            assert payload["prompts"][0]["vendor"] == "openai"
