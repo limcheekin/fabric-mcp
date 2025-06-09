@@ -75,9 +75,13 @@ class FabricMCP(FastMCP[None]):
                     self._default_vendor,
                 )
             elif self._default_model:
-                self.logger.info("Loaded default model: %s", self._default_model)
+                self.logger.info(
+                    "Loaded ONLY default model: %s (no vendor)", self._default_model
+                )
             elif self._default_vendor:
-                self.logger.info("Loaded default vendor: %s", self._default_vendor)
+                self.logger.info(
+                    "Loaded ONLY default vendor: %s (no model)", self._default_vendor
+                )
             else:
                 self.logger.info("No default model configuration found")
         except (OSError, ValueError, TypeError) as e:
@@ -363,8 +367,8 @@ class FabricMCP(FastMCP[None]):
             # Handle graceful shutdown
             self.logger.info("Server stopped by user.")
 
-    def get_model_and_vendor(self, config: PatternExecutionConfig) -> tuple[str, str]:
-        """Set the model and vendor based on the provided configuration."""
+    def get_vendor_and_model(self, config: PatternExecutionConfig) -> tuple[str, str]:
+        """Get the vendor and model based on the provided configuration."""
         # Apply default model configuration if not explicitly set
         model_name = config.model_name
         if not model_name and self._default_model:
@@ -412,7 +416,7 @@ class FabricMCP(FastMCP[None]):
         if config is None:
             config = PatternExecutionConfig()
 
-        vendor, model_name = self.get_model_and_vendor(config)
+        vendor, model_name = self.get_vendor_and_model(config)
 
         # AC3: Construct proper JSON payload for Fabric API /chat endpoint
         request_payload = {
