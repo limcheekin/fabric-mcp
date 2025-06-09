@@ -372,7 +372,7 @@ class FabricMCP(FastMCP[None]):
         vendor_name = self._default_vendor
         if not vendor_name:
             self.logger.debug(
-                "Vendor name is None. Falling back to hardcoded default vendor: %s",
+                "Vendor name is None or empty. Set to hardcoded default vendor: %s",
                 DEFAULT_VENDOR,
             )
             vendor_name = DEFAULT_VENDOR
@@ -380,7 +380,7 @@ class FabricMCP(FastMCP[None]):
         model_name = config.model_name or self._default_model
         if not model_name:
             self.logger.debug(
-                "Model name is None. Falling back to hardcoded default model: %s",
+                "Model name is None or empty. Set to hardcoded default model: %s",
                 DEFAULT_MODEL,
             )
             model_name = DEFAULT_MODEL
