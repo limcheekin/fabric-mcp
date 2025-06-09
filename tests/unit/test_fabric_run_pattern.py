@@ -11,7 +11,12 @@ from unittest.mock import patch
 import pytest
 from mcp import McpError
 
-from fabric_mcp.core import FabricMCP, PatternExecutionConfig
+from fabric_mcp.core import (
+    DEFAULT_MODEL,
+    DEFAULT_VENDOR,
+    FabricMCP,
+    PatternExecutionConfig,
+)
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_mcp_error,
@@ -396,12 +401,12 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             )
 
             assert isinstance(result, dict)
-            # Check that API was called (would use hardcoded "gpt-4o" and "openai")
+            # Check that API was called (would use hardcoded defaults)
             mock_api_client.post.assert_called_once()
             call_args = mock_api_client.post.call_args
             payload = call_args[1]["json_data"]
-            assert payload["prompts"][0]["model"] == "gpt-4o"
-            assert payload["prompts"][0]["vendor"] == "openai"
+            assert payload["prompts"][0]["model"] == DEFAULT_MODEL
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR
 
     def test_vendor_inference_for_claude_models(
         self, fabric_run_pattern_tool_claude: Callable[..., Any]
@@ -420,7 +425,7 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             call_args = mock_api_client.post.call_args
             payload = call_args[1]["json_data"]
             assert payload["prompts"][0]["model"] == "claude-3-opus"
-            assert payload["prompts"][0]["vendor"] == "anthropic"
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR
 
     def test_vendor_inference_for_gpt_models(
         self, fabric_run_pattern_tool_gpt: Callable[..., Any]
@@ -439,4 +444,4 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             call_args = mock_api_client.post.call_args
             payload = call_args[1]["json_data"]
             assert payload["prompts"][0]["model"] == "gpt-3.5-turbo"
-            assert payload["prompts"][0]["vendor"] == "openai"
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR

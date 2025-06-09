@@ -369,33 +369,21 @@ class FabricMCP(FastMCP[None]):
 
     def get_vendor_and_model(self, config: PatternExecutionConfig) -> tuple[str, str]:
         """Get the vendor and model based on the provided configuration."""
-        # Apply default model configuration if not explicitly set
-        model_name = config.model_name
-        if not model_name and self._default_model:
-            model_name = self._default_model
+        vendor_name = self._default_vendor
+        if not vendor_name:
+            self.logger.debug(
+                "Using default vendor from Fabric environment: %s", vendor_name
+            )
+            vendor_name = DEFAULT_VENDOR
+
+        model_name = config.model_name or self._default_model
+        if not model_name:
             self.logger.debug(
                 "Using default model from Fabric environment: %s", model_name
             )
-        elif not model_name:
-            # Fallback to hardcoded default if no environment default
             model_name = DEFAULT_MODEL
 
-        # Determine vendor - use default if available, otherwise infer from model
-        vendor = DEFAULT_VENDOR
-        if self._default_vendor:
-            vendor = self._default_vendor
-            self.logger.debug(
-                "Using default vendor from Fabric environment: %s", vendor
-            )
-        else:
-            # Simple heuristic to infer vendor from model name if no default
-            if model_name and "claude" in model_name.lower():
-                vendor = "anthropic"
-            elif model_name and "gpt" in model_name.lower():
-                vendor = "openai"
-            self.logger.debug("Inferred vendor from model name: %s", vendor)
-
-        return vendor, model_name
+        return vendor_name, model_name
 
     def _execute_fabric_pattern(
         self,
