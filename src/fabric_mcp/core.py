@@ -20,6 +20,9 @@ from .config import get_default_model
 DEFAULT_MCP_HTTP_PATH = "/message"
 DEFAULT_MCP_SSE_PATH = "/sse"
 
+DEFAULT_VENDOR = "openai"
+DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
+
 
 @dataclass
 class PatternExecutionConfig:  # pylint: disable=too-many-instance-attributes
@@ -360,6 +363,36 @@ class FabricMCP(FastMCP[None]):
             # Handle graceful shutdown
             self.logger.info("Server stopped by user.")
 
+    def get_model_and_vendor(self, config: PatternExecutionConfig) -> tuple[str, str]:
+        """Set the model and vendor based on the provided configuration."""
+        # Apply default model configuration if not explicitly set
+        model_name = config.model_name
+        if not model_name and self._default_model:
+            model_name = self._default_model
+            self.logger.debug(
+                "Using default model from Fabric environment: %s", model_name
+            )
+        elif not model_name:
+            # Fallback to hardcoded default if no environment default
+            model_name = DEFAULT_MODEL
+
+        # Determine vendor - use default if available, otherwise infer from model
+        vendor = DEFAULT_VENDOR
+        if self._default_vendor:
+            vendor = self._default_vendor
+            self.logger.debug(
+                "Using default vendor from Fabric environment: %s", vendor
+            )
+        else:
+            # Simple heuristic to infer vendor from model name if no default
+            if model_name and "claude" in model_name.lower():
+                vendor = "anthropic"
+            elif model_name and "gpt" in model_name.lower():
+                vendor = "openai"
+            self.logger.debug("Inferred vendor from model name: %s", vendor)
+
+        return vendor, model_name
+
     def _execute_fabric_pattern(
         self,
         pattern_name: str,
@@ -379,32 +412,7 @@ class FabricMCP(FastMCP[None]):
         if config is None:
             config = PatternExecutionConfig()
 
-        # Apply default model configuration if not explicitly set
-        model_name = config.model_name
-        if not model_name and self._default_model:
-            model_name = self._default_model
-            self.logger.debug(
-                "Using default model from Fabric environment: %s", model_name
-            )
-        elif not model_name:
-            # Fallback to hardcoded default if no environment default
-            model_name = "gpt-4o"
-            self.logger.debug("Using hardcoded default model: %s", model_name)
-
-        # Determine vendor - use default if available, otherwise infer from model
-        vendor = "openai"  # Default fallback
-        if self._default_vendor:
-            vendor = self._default_vendor
-            self.logger.debug(
-                "Using default vendor from Fabric environment: %s", vendor
-            )
-        else:
-            # Simple heuristic to infer vendor from model name if no default
-            if model_name and "claude" in model_name.lower():
-                vendor = "anthropic"
-            elif model_name and "gpt" in model_name.lower():
-                vendor = "openai"
-            self.logger.debug("Inferred vendor from model name: %s", vendor)
+        vendor, model_name = self.get_model_and_vendor(config)
 
         # AC3: Construct proper JSON payload for Fabric API /chat endpoint
         request_payload = {

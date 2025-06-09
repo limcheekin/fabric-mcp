@@ -22,9 +22,6 @@ from .server import app
 logger = logging.getLogger(__name__)
 
 
-# Port utilities moved to shared.port_utils
-
-
 def wait_for_server(host: str, port: int, timeout: float = 10.0) -> bool:
     """Wait for server to be ready to accept connections."""
     start_time = time.time()

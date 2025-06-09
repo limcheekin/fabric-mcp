@@ -12,7 +12,7 @@
 		{
 			"label": "Run Test Suite",
 			"type": "shell",
-			"command": "cd ${workspaceFolder} && make test",
+			"command": "cd ${workspaceFolder} && make test-fast",
 			"group": {
 				"kind": "test",
 				"isDefault": true
