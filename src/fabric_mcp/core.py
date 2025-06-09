@@ -372,7 +372,8 @@ class FabricMCP(FastMCP[None]):
         vendor_name = self._default_vendor
         if not vendor_name:
             self.logger.debug(
-                "Using default vendor from Fabric environment: %s", vendor_name
+                "Vendor name is None. Falling back to hardcoded default vendor: %s",
+                DEFAULT_VENDOR,
             )
             vendor_name = DEFAULT_VENDOR
 
