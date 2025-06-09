@@ -330,9 +330,10 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             500, "no such file or directory: pattern not found"
         )
 
-        with mock_fabric_api_client(builder):
+        with mock_fabric_api_client(builder) as mock_api_client:
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("nonexistent_pattern", "test input")
+                mock_api_client.close.assert_called_once()
 
             # Should be transformed to Invalid params error
             assert exc_info.value.error.code == -32602
