@@ -6,7 +6,7 @@ import sys
 from asyncio.exceptions import CancelledError
 from collections.abc import Callable
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from anyio import WouldBlock
@@ -347,3 +347,78 @@ def test_sse_method_handles_would_block(
         mock_run.assert_called_once()
         assert "Exception details: WouldBlock:" in caplog.text
         assert "Server stopped by user." in caplog.text
+
+
+def test_server_initialization_with_default_config_logging():
+    """Test server initialization logs different default config scenarios."""
+    # Test case 1: Both model and vendor present
+    with patch("fabric_mcp.core.get_default_model", return_value=("gpt-4", "openai")):
+        with patch("fabric_mcp.core.logging") as mock_logging:
+            mock_logger = Mock()
+            mock_logging.getLogger.return_value = mock_logger
+
+            FabricMCP(log_level="DEBUG")
+            mock_logger.info.assert_called_with(
+                "Loaded default model configuration: %s (%s)", "gpt-4", "openai"
+            )
+
+    # Test case 2: Only model present
+    with patch("fabric_mcp.core.get_default_model", return_value=("gpt-4", None)):
+        with patch("fabric_mcp.core.logging") as mock_logging:
+            mock_logger = Mock()
+            mock_logging.getLogger.return_value = mock_logger
+
+            FabricMCP(log_level="DEBUG")
+            mock_logger.info.assert_called_with(
+                "Loaded ONLY default model: %s (no vendor)", "gpt-4"
+            )
+
+    # Test case 3: Only vendor present
+    with patch("fabric_mcp.core.get_default_model", return_value=(None, "openai")):
+        with patch("fabric_mcp.core.logging") as mock_logging:
+            mock_logger = Mock()
+            mock_logging.getLogger.return_value = mock_logger
+
+            FabricMCP(log_level="DEBUG")
+            mock_logger.info.assert_called_with(
+                "Loaded ONLY default vendor: %s (no model)", "openai"
+            )
+
+    # Test case 4: Neither present
+    with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+        with patch("fabric_mcp.core.logging") as mock_logging:
+            mock_logger = Mock()
+            mock_logging.getLogger.return_value = mock_logger
+
+            FabricMCP(log_level="DEBUG")
+            mock_logger.info.assert_called_with("No default model configuration found")
+
+
+def test_server_initialization_handles_config_load_error():
+    """Test server initialization handles errors loading default config."""
+    error = OSError("File not found")
+    with patch("fabric_mcp.core.get_default_model", side_effect=error):
+        with patch("fabric_mcp.core.logging") as mock_logging:
+            mock_logger = Mock()
+            mock_logging.getLogger.return_value = mock_logger
+
+            server = FabricMCP(log_level="DEBUG")
+
+            mock_logger.warning.assert_called_with(
+                "Failed to load default model configuration: %s. "
+                "Pattern execution will use hardcoded defaults.",
+                error,
+            )
+        # Verify server still initializes with None defaults
+        assert server.get_default_model_config() == (None, None)
+
+
+def test_get_default_model_config_method():
+    """Test the public getter for default model configuration."""
+    with patch(
+        "fabric_mcp.core.get_default_model", return_value=("claude-3", "anthropic")
+    ):
+        server = FabricMCP()
+        model, vendor = server.get_default_model_config()
+        assert model == "claude-3"
+        assert vendor == "anthropic"

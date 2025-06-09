@@ -15,9 +15,13 @@ from mcp.types import ErrorData
 
 from . import __version__
 from .api_client import FabricApiClient
+from .config import get_default_model
 
 DEFAULT_MCP_HTTP_PATH = "/message"
 DEFAULT_MCP_SSE_PATH = "/sse"
+
+DEFAULT_VENDOR = "openai"
+DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
 
 
 @dataclass
@@ -44,7 +48,48 @@ class FabricMCP(FastMCP[None]):
         self.logger = logging.getLogger(__name__)
         self.__tools: list[Callable[..., Any]] = []
         self.log_level = log_level
+
+        # Load default model configuration from Fabric environment
+        self._default_model: str | None = None
+        self._default_vendor: str | None = None
+        self._load_default_config()
+
         self._register_tools()
+
+    def _load_default_config(self) -> None:
+        """Load default model configuration from Fabric environment.
+
+        This method loads DEFAULT_MODEL and DEFAULT_VENDOR from the Fabric
+        environment configuration (~/.config/fabric/.env) and stores them
+        as instance variables for use in pattern execution.
+
+        Errors during configuration loading are logged but do not prevent
+        server startup to ensure graceful degradation.
+        """
+        try:
+            self._default_model, self._default_vendor = get_default_model()
+            if self._default_model and self._default_vendor:
+                self.logger.info(
+                    "Loaded default model configuration: %s (%s)",
+                    self._default_model,
+                    self._default_vendor,
+                )
+            elif self._default_model:
+                self.logger.info(
+                    "Loaded ONLY default model: %s (no vendor)", self._default_model
+                )
+            elif self._default_vendor:
+                self.logger.info(
+                    "Loaded ONLY default vendor: %s (no model)", self._default_vendor
+                )
+            else:
+                self.logger.info("No default model configuration found")
+        except (OSError, ValueError, TypeError) as e:
+            self.logger.warning(
+                "Failed to load default model configuration: %s. "
+                "Pattern execution will use hardcoded defaults.",
+                e,
+            )
 
     def _make_fabric_api_request(
         self,
@@ -198,7 +243,35 @@ class FabricMCP(FastMCP[None]):
             """
             try:
                 return self._execute_fabric_pattern(pattern_name, input_text, config)
-            except (ConnectionError, RuntimeError, ValueError) as e:
+            except RuntimeError as e:
+                error_message = str(e)
+                # Check for pattern not found (500 with file not found message)
+                if (
+                    "Fabric API returned error 500" in error_message
+                    and "no such file or directory" in error_message
+                ):
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params - pattern doesn't exist
+                            message=f"Pattern '{pattern_name}' not found",
+                        )
+                    ) from e
+                # Check for other HTTP status errors
+                if "Fabric API returned error" in error_message:
+                    raise McpError(
+                        ErrorData(
+                            code=-32603,  # Internal error
+                            message=f"Error executing pattern '{pattern_name}': {e}",
+                        )
+                    ) from e
+                # Other runtime errors
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=f"Error executing pattern '{pattern_name}': {e}",
+                    )
+                ) from e
+            except ConnectionError as e:
                 raise McpError(
                     ErrorData(
                         code=-32603,  # Internal error
@@ -294,6 +367,26 @@ class FabricMCP(FastMCP[None]):
             # Handle graceful shutdown
             self.logger.info("Server stopped by user.")
 
+    def get_vendor_and_model(self, config: PatternExecutionConfig) -> tuple[str, str]:
+        """Get the vendor and model based on the provided configuration."""
+        vendor_name = self._default_vendor
+        if not vendor_name:
+            self.logger.debug(
+                "Vendor name is None or empty. Set to hardcoded default vendor: %s",
+                DEFAULT_VENDOR,
+            )
+            vendor_name = DEFAULT_VENDOR
+
+        model_name = config.model_name or self._default_model
+        if not model_name:
+            self.logger.debug(
+                "Model name is None or empty. Set to hardcoded default model: %s",
+                DEFAULT_MODEL,
+            )
+            model_name = DEFAULT_MODEL
+
+        return vendor_name, model_name
+
     def _execute_fabric_pattern(
         self,
         pattern_name: str,
@@ -313,14 +406,16 @@ class FabricMCP(FastMCP[None]):
         if config is None:
             config = PatternExecutionConfig()
 
+        vendor, model_name = self.get_vendor_and_model(config)
+
         # AC3: Construct proper JSON payload for Fabric API /chat endpoint
         request_payload = {
             "prompts": [
                 {
                     "userInput": input_text,
                     "patternName": pattern_name.strip(),
-                    "model": config.model_name or "gpt-4o",
-                    "vendor": "openai",  # Default vendor
+                    "model": model_name,
+                    "vendor": vendor,
                     "contextName": "",
                     "strategyName": config.strategy_name or "",
                 }
@@ -411,3 +506,14 @@ class FabricMCP(FastMCP[None]):
             "output_format": output_format,
             "output_text": "".join(output_chunks),
         }
+
+    def get_default_model_config(self) -> tuple[str | None, str | None]:
+        """Get the current default model configuration.
+
+        Returns:
+            Tuple of (default_model, default_vendor). Either or both can be None.
+
+        Note:
+            This method is primarily intended for testing and introspection.
+        """
+        return self._default_model, self._default_vendor

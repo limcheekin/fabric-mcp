@@ -6,11 +6,17 @@ including error handling, SSE response parsing, and API integration.
 
 from collections.abc import Callable
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from mcp import McpError
 
-from fabric_mcp.core import FabricMCP
+from fabric_mcp.core import (
+    DEFAULT_MODEL,
+    DEFAULT_VENDOR,
+    FabricMCP,
+    PatternExecutionConfig,
+)
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_mcp_error,
@@ -18,8 +24,8 @@ from tests.shared.fabric_api_mocks import (
 )
 
 
-class TestFabricRunPattern:
-    """Test cases for fabric_run_pattern tool."""
+class TestFabricRunPatternFixtureBase:
+    """Test cases for fabric_run_pattern tool SSE response handling."""
 
     @pytest.fixture
     def server_instance(self) -> FabricMCP:
@@ -32,6 +38,10 @@ class TestFabricRunPattern:
         tools = getattr(server_instance, "_FabricMCP__tools")
         # fabric_run_pattern is the 3rd tool (index 2)
         return tools[2]
+
+
+class TestFabricRunPatternBasicExecution(TestFabricRunPatternFixtureBase):
+    """Test cases for basic fabric_run_pattern tool execution scenarios."""
 
     def test_successful_execution_with_basic_input(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -90,6 +100,10 @@ class TestFabricRunPattern:
             assert result["output_format"] == "text"
             mock_api_client.close.assert_called_once()
 
+
+class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
+    """Test cases for fabric_run_pattern tool error handling."""
+
     def test_network_connection_error(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
@@ -100,7 +114,8 @@ class TestFabricRunPattern:
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Unexpected error executing pattern")
+            # Connection errors should be wrapped in McpError by the tool wrapper
+            assert_mcp_error(exc_info, -32603, "Error executing pattern")
             mock_api_client.close.assert_called_once()
 
     def test_http_404_error(self, fabric_run_pattern_tool: Callable[..., Any]) -> None:
@@ -151,6 +166,67 @@ class TestFabricRunPattern:
             assert_mcp_error(exc_info, -32603, "Malformed SSE data")
             mock_api_client.close.assert_called_once()
 
+    def test_empty_sse_stream(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test handling of empty SSE stream."""
+        builder = FabricApiMockBuilder().with_empty_sse_stream()
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("test_pattern", "test input")
+
+            assert_mcp_error(exc_info, -32603, "Empty SSE stream")
+            mock_api_client.close.assert_called_once()
+
+    def test_sse_stream_with_non_data_lines(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test SSE stream processing with non-data lines (should be ignored)."""
+        sse_lines = [
+            ": This is a comment line",
+            'data: {"type": "content", "content": "Hello", "format": "text"}',
+            "event: test-event",
+            'data: {"type": "complete"}',
+            "",  # Empty line
+        ]
+        builder = FabricApiMockBuilder().with_sse_lines(sse_lines)
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            result: dict[str, Any] = fabric_run_pattern_tool(
+                "test_pattern", "test input"
+            )
+
+            assert result["output_text"] == "Hello"
+            assert result["output_format"] == "text"
+            mock_api_client.close.assert_called_once()
+
+
+class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
+    """Test cases for fabric_run_pattern tool input validation and edge cases."""
+
+    def test_empty_pattern_name_validation(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test that empty pattern name raises ValueError."""
+        # Test empty string
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool("", "test input")
+
+        # Test whitespace-only string
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool("   ", "test input")
+
+        # Test None (though this might be caught by type system)
+        with pytest.raises(
+            ValueError, match="pattern_name is required and cannot be empty"
+        ):
+            fabric_run_pattern_tool(None, "test input")
+
     def test_empty_input_handling(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
@@ -192,37 +268,180 @@ class TestFabricRunPattern:
             assert result["output_text"] == "Output"
             mock_api_client.close.assert_called_once()
 
-    def test_empty_sse_stream(
+
+class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
+    """Test cases for fabric_run_pattern tool model and vendor inference."""
+
+    @pytest.fixture
+    def server_instance_no_defaults(self) -> FabricMCP:
+        """Create a FabricMCP server instance with no default model/vendor."""
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            return FabricMCP()
+
+    @pytest.fixture
+    def server_instance_claude_model(self) -> FabricMCP:
+        """Create a FabricMCP server instance with Claude model default."""
+        with patch(
+            "fabric_mcp.core.get_default_model",
+            return_value=("claude-3-opus", None),
+        ):
+            return FabricMCP()
+
+    @pytest.fixture
+    def server_instance_gpt_model(self) -> FabricMCP:
+        """Create a FabricMCP server instance with GPT model default."""
+        with patch(
+            "fabric_mcp.core.get_default_model",
+            return_value=("gpt-3.5-turbo", None),
+        ):
+            return FabricMCP()
+
+    @pytest.fixture
+    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from the server."""
+        tools = getattr(server_instance, "_FabricMCP__tools")
+        # fabric_run_pattern is the 3rd tool (index 2)
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_no_defaults(
+        self, server_instance_no_defaults: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with no defaults."""
+        tools = getattr(server_instance_no_defaults, "_FabricMCP__tools")
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_claude(
+        self, server_instance_claude_model: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with Claude model."""
+        tools = getattr(server_instance_claude_model, "_FabricMCP__tools")
+        return tools[2]
+
+    @pytest.fixture
+    def fabric_run_pattern_tool_gpt(
+        self, server_instance_gpt_model: FabricMCP
+    ) -> Callable[..., Any]:
+        """Get the fabric_run_pattern tool from server with GPT model."""
+        tools = getattr(server_instance_gpt_model, "_FabricMCP__tools")
+        return tools[2]
+
+    def test_pattern_not_found_500_error(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test handling of empty SSE stream."""
-        builder = FabricApiMockBuilder().with_empty_sse_stream()
+        """Test handling of 500 error indicating pattern not found."""
+        builder = FabricApiMockBuilder().with_http_error(
+            500, "no such file or directory: pattern not found"
+        )
 
         with mock_fabric_api_client(builder) as mock_api_client:
             with pytest.raises(McpError) as exc_info:
-                fabric_run_pattern_tool("test_pattern", "test input")
+                fabric_run_pattern_tool("nonexistent_pattern", "test input")
+                mock_api_client.close.assert_called_once()
 
-            assert_mcp_error(exc_info, -32603, "Empty SSE stream")
-            mock_api_client.close.assert_called_once()
+            # Should be transformed to Invalid params error
+            assert exc_info.value.error.code == -32602
+            assert (
+                "Pattern 'nonexistent_pattern' not found"
+                in exc_info.value.error.message
+            )
 
-    def test_sse_stream_with_non_data_lines(
+    def test_generic_500_error(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test SSE stream processing with non-data lines (should be ignored)."""
-        sse_lines = [
-            ": This is a comment line",
-            'data: {"type": "content", "content": "Hello", "format": "text"}',
-            "event: test-event",
-            'data: {"type": "complete"}',
-            "",  # Empty line
-        ]
-        builder = FabricApiMockBuilder().with_sse_lines(sse_lines)
+        """Test handling of generic 500 error (not pattern not found)."""
+        builder = FabricApiMockBuilder().with_http_error(
+            500, "Database connection failed"
+        )
 
+        with mock_fabric_api_client(builder) as client:
+            with pytest.raises(McpError) as exc_info:
+                fabric_run_pattern_tool("test_pattern", "test input")
+
+            error = exc_info.value
+            assert error.error.code == -32603  # Internal error
+            assert "Database connection failed" in error.error.message
+            client.close.assert_called_once()
+
+    def test_vendor_inference_from_model_name(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference when no default vendor is configured."""
+        builder = FabricApiMockBuilder().with_successful_sse("Inference test")
+
+        # Test Claude model inference
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            with mock_fabric_api_client(builder):
+                config = PatternExecutionConfig(model_name="claude-3-sonnet")
+                result = fabric_run_pattern_tool(
+                    "test_pattern", "test input", config=config
+                )
+                assert result["output_text"] == "Inference test"
+
+        # Test GPT model inference
+        with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
+            with mock_fabric_api_client(builder):
+                config = PatternExecutionConfig(model_name="gpt-4")
+                result = fabric_run_pattern_tool(
+                    "test_pattern", "test input", config=config
+                )
+                assert result["output_text"] == "Inference test"
+
+    def test_hardcoded_model_fallback_when_no_defaults(
+        self, fabric_run_pattern_tool_no_defaults: Callable[..., Any]
+    ) -> None:
+        """Test fallback to hardcoded default model when no environment defaults."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
+
+        # Mock get_default_model to return None for both model and vendor
         with mock_fabric_api_client(builder) as mock_api_client:
-            result: dict[str, Any] = fabric_run_pattern_tool(
+            result: dict[str, Any] = fabric_run_pattern_tool_no_defaults(
                 "test_pattern", "test input"
             )
 
-            assert result["output_text"] == "Hello"
-            assert result["output_format"] == "text"
-            mock_api_client.close.assert_called_once()
+            assert isinstance(result, dict)
+            # Check that API was called (would use hardcoded defaults)
+            mock_api_client.post.assert_called_once()
+            call_args = mock_api_client.post.call_args
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == DEFAULT_MODEL
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR
+
+    def test_vendor_inference_for_claude_models(
+        self, fabric_run_pattern_tool_claude: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference from Claude model names."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            result: dict[str, Any] = fabric_run_pattern_tool_claude(
+                "test_pattern", "test input"
+            )
+
+            assert isinstance(result, dict)
+            # Check that vendor was inferred as "anthropic" for Claude models
+            mock_api_client.post.assert_called_once()
+            call_args = mock_api_client.post.call_args
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == "claude-3-opus"
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR
+
+    def test_vendor_inference_for_gpt_models(
+        self, fabric_run_pattern_tool_gpt: Callable[..., Any]
+    ) -> None:
+        """Test vendor inference from GPT model names."""
+        builder = FabricApiMockBuilder().with_successful_sse("Hello, World!")
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            result: dict[str, Any] = fabric_run_pattern_tool_gpt(
+                "test_pattern", "test input"
+            )
+
+            assert isinstance(result, dict)
+            # Check that vendor was inferred as "openai" for GPT models
+            mock_api_client.post.assert_called_once()
+            call_args = mock_api_client.post.call_args
+            payload = call_args[1]["json_data"]
+            assert payload["prompts"][0]["model"] == "gpt-3.5-turbo"
+            assert payload["prompts"][0]["vendor"] == DEFAULT_VENDOR

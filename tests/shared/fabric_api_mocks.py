@@ -197,7 +197,7 @@ class FabricApiMockBuilder:
         Returns:
             Self for method chaining
         """
-        connection_error = httpx.RequestError(error_message)
+        connection_error = httpx.ConnectError(error_message)
         self.mock_api_client.get.side_effect = connection_error
         self.mock_api_client.post.side_effect = connection_error
         return self
