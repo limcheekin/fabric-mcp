@@ -369,7 +369,9 @@ def test_server_initialization_with_default_config_logging():
             mock_logging.getLogger.return_value = mock_logger
 
             FabricMCP(log_level="DEBUG")
-            mock_logger.info.assert_called_with("Loaded default model: %s", "gpt-4")
+            mock_logger.info.assert_called_with(
+                "Loaded ONLY default model: %s (no vendor)", "gpt-4"
+            )
 
     # Test case 3: Only vendor present
     with patch("fabric_mcp.core.get_default_model", return_value=(None, "openai")):
@@ -378,7 +380,9 @@ def test_server_initialization_with_default_config_logging():
             mock_logging.getLogger.return_value = mock_logger
 
             FabricMCP(log_level="DEBUG")
-            mock_logger.info.assert_called_with("Loaded default vendor: %s", "openai")
+            mock_logger.info.assert_called_with(
+                "Loaded ONLY default vendor: %s (no model)", "openai"
+            )
 
     # Test case 4: Neither present
     with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
