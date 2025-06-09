@@ -326,8 +326,8 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
         """Test handling of 500 error indicating pattern not found."""
-        builder = FabricApiMockBuilder().with_500_error_pattern_not_found(
-            "nonexistent_pattern", "no such file or directory: pattern not found"
+        builder = FabricApiMockBuilder().with_http_error(
+            500, "no such file or directory: pattern not found"
         )
 
         with mock_fabric_api_client(builder):
@@ -345,8 +345,8 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
         """Test handling of generic 500 error (not pattern not found)."""
-        builder = FabricApiMockBuilder().with_500_error_generic(
-            "Database connection failed"
+        builder = FabricApiMockBuilder().with_http_error(
+            500, "Database connection failed"
         )
 
         with mock_fabric_api_client(builder) as client:
