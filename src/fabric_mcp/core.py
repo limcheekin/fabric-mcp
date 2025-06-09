@@ -380,7 +380,8 @@ class FabricMCP(FastMCP[None]):
         model_name = config.model_name or self._default_model
         if not model_name:
             self.logger.debug(
-                "Using default model from Fabric environment: %s", model_name
+                "Model name is None. Falling back to hardcoded default model: %s",
+                DEFAULT_MODEL,
             )
             model_name = DEFAULT_MODEL
 
