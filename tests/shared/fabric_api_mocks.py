@@ -263,17 +263,9 @@ class FabricApiMockBuilder:
         Returns:
             Self for method chaining
         """
-        mock_request = Mock()
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = error_message
-        mock_response.reason_phrase = "Internal Server Error"
-
-        http_error = httpx.HTTPStatusError(
-            "HTTP 500", request=mock_request, response=mock_response
+        return self.with_500_error_generic(
+            f"Pattern '{_pattern_name}' not found: {error_message}"
         )
-        self.mock_api_client.post.side_effect = http_error
-        return self
 
     def with_500_error_generic(
         self, error_message: str = "Internal Server Error"

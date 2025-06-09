@@ -349,13 +349,14 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             "Database connection failed"
         )
 
-        with mock_fabric_api_client(builder):
+        with mock_fabric_api_client(builder) as client:
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
             error = exc_info.value
             assert error.error.code == -32603  # Internal error
             assert "Database connection failed" in error.error.message
+            client.close.assert_called_once()
 
     def test_vendor_inference_from_model_name(
         self, fabric_run_pattern_tool: Callable[..., Any]
