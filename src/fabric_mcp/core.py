@@ -161,7 +161,7 @@ class FabricMCP(FastMCP[None]):
     def _register_tools(self):
         """Register all MCP tools with the server."""
 
-        @self.tool()
+        @self.tool
         def fabric_list_patterns() -> list[str]:
             """Return a list of available fabric patterns."""
             # Use helper method for API request
@@ -191,9 +191,9 @@ class FabricMCP(FastMCP[None]):
 
             return validated_patterns
 
-        self.__tools.append(fabric_list_patterns)
+        self.__tools.append(fabric_list_patterns.fn)
 
-        @self.tool()
+        @self.tool
         def fabric_get_pattern_details(pattern_name: str) -> dict[str, str]:
             """Retrieve detailed information for a specific Fabric pattern."""
             # Use helper method for API request with pattern-specific error handling
@@ -212,9 +212,9 @@ class FabricMCP(FastMCP[None]):
 
             return details
 
-        self.__tools.append(fabric_get_pattern_details)
+        self.__tools.append(fabric_get_pattern_details.fn)
 
-        @self.tool()
+        @self.tool
         def fabric_run_pattern(
             pattern_name: str,
             input_text: str = "",
@@ -279,9 +279,9 @@ class FabricMCP(FastMCP[None]):
                     )
                 ) from e
 
-        self.__tools.append(fabric_run_pattern)
+        self.__tools.append(fabric_run_pattern.fn)
 
-        @self.tool()
+        @self.tool
         def fabric_list_models() -> dict[Any, Any]:
             """Retrieve configured Fabric models by vendor."""
             # This is a placeholder for the actual implementation
@@ -293,9 +293,9 @@ class FabricMCP(FastMCP[None]):
                 },
             }
 
-        self.__tools.append(fabric_list_models)
+        self.__tools.append(fabric_list_models.fn)
 
-        @self.tool()
+        @self.tool
         def fabric_list_strategies() -> dict[Any, Any]:
             """Retrieve available Fabric strategies."""
             # This is a placeholder for the actual implementation
@@ -314,9 +314,9 @@ class FabricMCP(FastMCP[None]):
                 ]
             }
 
-        self.__tools.append(fabric_list_strategies)
+        self.__tools.append(fabric_list_strategies.fn)
 
-        @self.tool()
+        @self.tool
         def fabric_get_configuration() -> dict[Any, Any]:
             """Retrieve Fabric configuration with sensitive values redacted."""
             # This is a placeholder for the actual implementation
@@ -327,7 +327,7 @@ class FabricMCP(FastMCP[None]):
                 "fabric_config_dir": "~/.config/fabric",
             }
 
-        self.__tools.append(fabric_get_configuration)
+        self.__tools.append(fabric_get_configuration.fn)
 
     def http_streamable(
         self,
