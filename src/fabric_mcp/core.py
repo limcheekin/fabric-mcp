@@ -43,17 +43,26 @@ class FabricMCP(FastMCP[None]):
     def __init__(self, log_level: str = "INFO"):
         """Initialize the MCP server with a model."""
         super().__init__(f"Fabric MCP v{__version__}")
-        self.mcp = self
         self.logger = logging.getLogger(__name__)
-        self.__tools: list[Callable[..., Any]] = []
         self.log_level = log_level
+        self.__tools: list[Callable[..., Any]] = []
 
         # Load default model configuration from Fabric environment
         self._default_model: str | None = None
         self._default_vendor: str | None = None
         self._load_default_config()
 
-        self._register_tools()
+        # Explicitly register tool methods
+        for fn in (
+            self.fabric_list_patterns,
+            self.fabric_get_pattern_details,
+            self.fabric_run_pattern,
+            self.fabric_list_models,
+            self.fabric_list_strategies,
+            self.fabric_get_configuration,
+        ):
+            self.__tools.append(fn)
+            self.tool(fn)
 
     def _load_default_config(self) -> None:
         """Load default model configuration from Fabric environment.
@@ -158,176 +167,154 @@ class FabricMCP(FastMCP[None]):
                 )
             ) from e
 
-    def _register_tools(self):
-        """Register all MCP tools with the server."""
+    def fabric_list_patterns(self) -> list[str]:
+        """Return a list of available fabric patterns."""
+        # Use helper method for API request
+        response_data = self._make_fabric_api_request(
+            "/patterns/names", operation="retrieving patterns"
+        )
 
-        @self.tool
-        def fabric_list_patterns() -> list[str]:
-            """Return a list of available fabric patterns."""
-            # Use helper method for API request
-            response_data = self._make_fabric_api_request(
-                "/patterns/names", operation="retrieving patterns"
+        # Validate response is a list
+        if not isinstance(response_data, list):
+            error_msg = "Invalid response format from Fabric API: expected list"
+            raise McpError(
+                ErrorData(code=-32603, message=error_msg)  # Internal error
             )
 
-            # Validate response is a list
-            if not isinstance(response_data, list):
-                error_msg = "Invalid response format from Fabric API: expected list"
+        # Ensure all items are strings
+        validated_patterns: list[str] = []
+        for item in response_data:  # type: ignore[misc]
+            if isinstance(item, str):
+                validated_patterns.append(item)
+            else:
+                # Log warning but continue with valid patterns
+                item_any = cast(Any, item)
+                item_type = type(item_any).__name__ if item_any is not None else "None"
+                self.logger.warning("Non-string pattern name found: %s", item_type)
+
+        return validated_patterns
+
+    def fabric_get_pattern_details(self, pattern_name: str) -> dict[str, str]:
+        """Retrieve detailed information for a specific Fabric pattern."""
+        # Use helper method for API request with pattern-specific error handling
+        response_data = self._make_fabric_api_request(
+            f"/patterns/{pattern_name}",
+            pattern_name=pattern_name,
+            operation="retrieving pattern details",
+        )
+
+        # Transform Fabric API response to MCP expected format
+        details = {
+            "name": response_data.get("Name", ""),
+            "description": response_data.get("Description", ""),
+            "system_prompt": response_data.get("Pattern", ""),
+        }
+
+        return details
+
+    def fabric_run_pattern(
+        self,
+        pattern_name: str,
+        input_text: str = "",
+        stream: bool = False,  # Will be used later; pylint: disable=unused-argument
+        config: PatternExecutionConfig | None = None,
+    ) -> dict[Any, Any]:
+        """
+        Execute a Fabric pattern with input text and return complete output.
+
+        This tool calls the Fabric API\\'s /chat endpoint to execute a named pattern
+        with the provided input text. Returns the complete LLM-generated output
+        in a non-streaming manner (streaming parameter is ignored in this version).
+
+        Args:
+            pattern_name: The name of the fabric pattern to run (required).
+            input_text: The input text to be processed by the pattern (optional).
+            stream: Whether to stream the output (ignored, always non-streaming).
+            config: Optional configuration for execution parameters.
+
+        Returns:
+            dict[Any, Any]: Contains \\'output_format\\' and \\'output_text\\' fields.
+
+        Raises:
+            McpError: For any API errors, connection issues, or parsing problems.
+        """
+        _ = stream  # TODO: #36 remove this later when streaming is implemented
+        try:
+            return self._execute_fabric_pattern(pattern_name, input_text, config)
+        except RuntimeError as e:
+            error_message = str(e)
+            # Check for pattern not found (500 with file not found message)
+            if (
+                "Fabric API returned error 500" in error_message
+                and "no such file or directory" in error_message
+            ):
                 raise McpError(
-                    ErrorData(code=-32603, message=error_msg)  # Internal error
+                    ErrorData(
+                        code=-32602,  # Invalid params - pattern doesn't exist
+                        message=f"Pattern '{pattern_name}' not found",
+                    )
+                ) from e
+            # Check for other HTTP status errors
+            if "Fabric API returned error" in error_message:
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=f"Error executing pattern '{pattern_name}': {e}",
+                    )
+                ) from e
+            # Other runtime errors
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message=f"Error executing pattern '{pattern_name}': {e}",
                 )
+            ) from e
+        except ConnectionError as e:
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message=f"Error executing pattern '{pattern_name}': {e}",
+                )
+            ) from e
 
-            # Ensure all items are strings
-            validated_patterns: list[str] = []
-            for item in response_data:  # type: ignore[misc]
-                if isinstance(item, str):
-                    validated_patterns.append(item)
-                else:
-                    # Log warning but continue with valid patterns
-                    item_any = cast(Any, item)
-                    item_type = (
-                        type(item_any).__name__ if item_any is not None else "None"
-                    )
-                    self.logger.warning("Non-string pattern name found: %s", item_type)
+    def fabric_list_models(self) -> dict[Any, Any]:
+        """Retrieve configured Fabric models by vendor."""
+        # This is a placeholder for the actual implementation
+        return {
+            "models": ["gpt-4o", "gpt-3.5-turbo", "claude-3-opus"],
+            "vendors": {
+                "openai": ["gpt-4o", "gpt-3.5-turbo"],
+                "anthropic": ["claude-3-opus"],
+            },
+        }
 
-            return validated_patterns
-
-        self.__tools.append(fabric_list_patterns.fn)
-
-        @self.tool
-        def fabric_get_pattern_details(pattern_name: str) -> dict[str, str]:
-            """Retrieve detailed information for a specific Fabric pattern."""
-            # Use helper method for API request with pattern-specific error handling
-            response_data = self._make_fabric_api_request(
-                f"/patterns/{pattern_name}",
-                pattern_name=pattern_name,
-                operation="retrieving pattern details",
-            )
-
-            # Transform Fabric API response to MCP expected format
-            details = {
-                "name": response_data.get("Name", ""),
-                "description": response_data.get("Description", ""),
-                "system_prompt": response_data.get("Pattern", ""),
-            }
-
-            return details
-
-        self.__tools.append(fabric_get_pattern_details.fn)
-
-        @self.tool
-        def fabric_run_pattern(
-            pattern_name: str,
-            input_text: str = "",
-            stream: bool = False,  # Will be used later; pylint: disable=unused-argument
-            config: PatternExecutionConfig | None = None,
-        ) -> dict[Any, Any]:
-            """
-            Execute a Fabric pattern with input text and return complete output.
-
-            This tool calls the Fabric API's /chat endpoint to execute a named pattern
-            with the provided input text. Returns the complete LLM-generated output
-            in a non-streaming manner (streaming parameter is ignored in this version).
-
-            Args:
-                pattern_name: The name of the fabric pattern to run (required).
-                input_text: The input text to be processed by the pattern (optional).
-                stream: Whether to stream the output (ignored, always non-streaming).
-                config: Optional configuration for execution parameters.
-
-            Returns:
-                dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
-
-            Raises:
-                McpError: For any API errors, connection issues, or parsing problems.
-            """
-            _ = stream  # TODO: #36 remove this later when streaming is implemented
-            try:
-                return self._execute_fabric_pattern(pattern_name, input_text, config)
-            except RuntimeError as e:
-                error_message = str(e)
-                # Check for pattern not found (500 with file not found message)
-                if (
-                    "Fabric API returned error 500" in error_message
-                    and "no such file or directory" in error_message
-                ):
-                    raise McpError(
-                        ErrorData(
-                            code=-32602,  # Invalid params - pattern doesn't exist
-                            message=f"Pattern '{pattern_name}' not found",
-                        )
-                    ) from e
-                # Check for other HTTP status errors
-                if "Fabric API returned error" in error_message:
-                    raise McpError(
-                        ErrorData(
-                            code=-32603,  # Internal error
-                            message=f"Error executing pattern '{pattern_name}': {e}",
-                        )
-                    ) from e
-                # Other runtime errors
-                raise McpError(
-                    ErrorData(
-                        code=-32603,  # Internal error
-                        message=f"Error executing pattern '{pattern_name}': {e}",
-                    )
-                ) from e
-            except ConnectionError as e:
-                raise McpError(
-                    ErrorData(
-                        code=-32603,  # Internal error
-                        message=f"Error executing pattern '{pattern_name}': {e}",
-                    )
-                ) from e
-
-        self.__tools.append(fabric_run_pattern.fn)
-
-        @self.tool
-        def fabric_list_models() -> dict[Any, Any]:
-            """Retrieve configured Fabric models by vendor."""
-            # This is a placeholder for the actual implementation
-            return {
-                "models": ["gpt-4o", "gpt-3.5-turbo", "claude-3-opus"],
-                "vendors": {
-                    "openai": ["gpt-4o", "gpt-3.5-turbo"],
-                    "anthropic": ["claude-3-opus"],
+    def fabric_list_strategies(self) -> dict[Any, Any]:
+        """Retrieve available Fabric strategies."""
+        # This is a placeholder for the actual implementation
+        return {
+            "strategies": [
+                {
+                    "name": "default",
+                    "description": "Default strategy for pattern execution",
+                    "prompt": "Execute the pattern with default settings",
                 },
-            }
+                {
+                    "name": "creative",
+                    "description": "Creative strategy with higher temperature",
+                    "prompt": "Execute the pattern with creative parameters",
+                },
+            ]
+        }
 
-        self.__tools.append(fabric_list_models.fn)
-
-        @self.tool
-        def fabric_list_strategies() -> dict[Any, Any]:
-            """Retrieve available Fabric strategies."""
-            # This is a placeholder for the actual implementation
-            return {
-                "strategies": [
-                    {
-                        "name": "default",
-                        "description": "Default strategy for pattern execution",
-                        "prompt": "Execute the pattern with default settings",
-                    },
-                    {
-                        "name": "creative",
-                        "description": "Creative strategy with higher temperature",
-                        "prompt": "Execute the pattern with creative parameters",
-                    },
-                ]
-            }
-
-        self.__tools.append(fabric_list_strategies.fn)
-
-        @self.tool
-        def fabric_get_configuration() -> dict[Any, Any]:
-            """Retrieve Fabric configuration with sensitive values redacted."""
-            # This is a placeholder for the actual implementation
-            return {
-                "openai_api_key": "[REDACTED_BY_MCP_SERVER]",
-                "ollama_url": "http://localhost:11434",
-                "anthropic_api_key": "[REDACTED_BY_MCP_SERVER]",
-                "fabric_config_dir": "~/.config/fabric",
-            }
-
-        self.__tools.append(fabric_get_configuration.fn)
+    def fabric_get_configuration(self) -> dict[Any, Any]:
+        """Retrieve Fabric configuration with sensitive values redacted."""
+        # This is a placeholder for the actual implementation
+        return {
+            "openai_api_key": "[REDACTED_BY_MCP_SERVER]",
+            "ollama_url": "http://localhost:11434",
+            "anthropic_api_key": "[REDACTED_BY_MCP_SERVER]",
+            "fabric_config_dir": "~/.config/fabric",
+        }
 
     def http_streamable(
         self,
@@ -337,9 +324,7 @@ class FabricMCP(FastMCP[None]):
     ):
         """Run the MCP server with StreamableHttpTransport."""
         try:
-            self.mcp.run(
-                transport="streamable-http", host=host, port=port, path=mcp_path
-            )
+            self.run(transport="streamable-http", host=host, port=port, path=mcp_path)
         except (KeyboardInterrupt, CancelledError, WouldBlock) as e:
             # Handle graceful shutdown
             self.logger.debug("Exception details: %s: %s", type(e).__name__, e)
@@ -348,7 +333,7 @@ class FabricMCP(FastMCP[None]):
     def stdio(self):
         """Run the MCP server."""
         try:
-            self.mcp.run()
+            self.run()
         except (KeyboardInterrupt, CancelledError, WouldBlock):
             # Handle graceful shutdown
             self.logger.info("Server stopped by user.")

@@ -57,10 +57,9 @@ class TestFabricMCPCore:
     def test_server_initialization_and_configuration(self, server: FabricMCP):
         """Test server initialization and configuration."""
         assert server.log_level == "DEBUG"
-        assert server.mcp.name.startswith("Fabric MCP v")
+        assert server.name.startswith("Fabric MCP v")
         assert hasattr(server, "logger")
-        assert hasattr(server, "mcp")
-        assert server.mcp is not None
+        assert server is not None
 
     def test_tool_registration_and_discovery(self, server: FabricMCP):
         """Test that MCP tools are properly registered and discoverable."""
@@ -206,7 +205,7 @@ class TestFabricMCPCore:
 
     def test_server_stdio_integration(self, server: FabricMCP):
         """Test the stdio method integration with mocked MCP run."""
-        with patch.object(server.mcp, "run") as mock_run:
+        with patch.object(server, "run") as mock_run:
             server.stdio()
             mock_run.assert_called_once()
 
@@ -216,11 +215,11 @@ class TestFabricMCPCore:
         """Test graceful shutdown on various interrupt signals."""
         with caplog.at_level(logging.INFO):
             # Test KeyboardInterrupt
-            with patch.object(server.mcp, "run", side_effect=KeyboardInterrupt):
+            with patch.object(server, "run", side_effect=KeyboardInterrupt):
                 server.stdio()
 
             # Test CancelledError
-            with patch.object(server.mcp, "run", side_effect=CancelledError):
+            with patch.object(server, "run", side_effect=CancelledError):
                 server.stdio()
 
         # Should have at least one graceful shutdown message
@@ -262,13 +261,12 @@ class TestFabricMCPCore:
         """Test complete server lifecycle: init -> configure -> run -> shutdown."""
         # Server is already initialized via fixture
         assert server is not None
-        assert hasattr(server, "mcp")
 
         # Test configuration
         assert server.log_level == "DEBUG"
 
         # Test run with immediate shutdown
-        with patch.object(server.mcp, "run", side_effect=KeyboardInterrupt):
+        with patch.object(server, "run", side_effect=KeyboardInterrupt):
             server.stdio()
 
         # Server should handle shutdown gracefully

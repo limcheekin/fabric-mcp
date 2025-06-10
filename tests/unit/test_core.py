@@ -41,8 +41,8 @@ def server_instance_fixture() -> FabricMCP:
 
 def test_server_initialization(server_instance: FabricMCP):
     """Test the initialization of the FabricMCPServer."""
-    assert isinstance(server_instance.mcp, FastMCP)
-    assert server_instance.mcp.name == f"Fabric MCP v{__version__}"
+    assert isinstance(server_instance, FastMCP)
+    assert server_instance.name == f"Fabric MCP v{__version__}"
     assert isinstance(server_instance.logger, logging.Logger)
     # Check if log level propagates (Note: FastMCP handles its own logger setup)
     # We check the logger passed during init, FastMCP might configure differently
@@ -51,7 +51,7 @@ def test_server_initialization(server_instance: FabricMCP):
 
 def test_stdio_method_runs_mcp(server_instance: FabricMCP):
     """Test that the stdio method calls mcp.run()."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         server_instance.stdio()
         mock_run.assert_called_once()
 
@@ -61,7 +61,7 @@ def test_stdio_method_handles_keyboard_interrupt(
     caplog: pytest.LogCaptureFixture,
 ):
     """Test that stdio handles KeyboardInterrupt gracefully."""
-    with patch.object(server_instance.mcp, "run", side_effect=KeyboardInterrupt):
+    with patch.object(server_instance, "run", side_effect=KeyboardInterrupt):
         with caplog.at_level(logging.INFO):
             server_instance.stdio()
     assert "Server stopped by user." in caplog.text
@@ -72,7 +72,7 @@ def test_stdio_method_handles_cancelled_error(
     caplog: pytest.LogCaptureFixture,
 ):
     """Test that stdio handles CancelledError gracefully."""
-    with patch.object(server_instance.mcp, "run", side_effect=CancelledError):
+    with patch.object(server_instance, "run", side_effect=CancelledError):
         with caplog.at_level(logging.INFO):
             server_instance.stdio()
     assert "Server stopped by user." in caplog.text
@@ -83,7 +83,7 @@ def test_stdio_method_handles_would_block(
     caplog: pytest.LogCaptureFixture,
 ):
     """Test that stdio handles WouldBlock gracefully."""
-    with patch.object(server_instance.mcp, "run", side_effect=WouldBlock):
+    with patch.object(server_instance, "run", side_effect=WouldBlock):
         with caplog.at_level(logging.INFO):
             server_instance.stdio()
     assert "Server stopped by user." in caplog.text
@@ -198,7 +198,7 @@ def _test_get_configuration_tool(
 
 def test_http_streamable_method_runs_mcp(server_instance: FabricMCP):
     """Test that the http_streamable method calls mcp.run() with streamable-http."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         # Mock run to avoid actually starting the server
         mock_run.return_value = None
 
@@ -216,7 +216,7 @@ def test_http_streamable_method_runs_mcp(server_instance: FabricMCP):
 
 def test_http_streamable_method_with_custom_config(server_instance: FabricMCP):
     """Test that the http_streamable method calls mcp.run() with custom config."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         # Mock run to avoid actually starting the server
         mock_run.return_value = None
 
@@ -234,7 +234,7 @@ def test_http_streamable_method_with_custom_config(server_instance: FabricMCP):
 
 def test_http_streamable_method_handles_keyboard_interrupt(server_instance: FabricMCP):
     """Test that the http_streamable method handles KeyboardInterrupt gracefully."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         mock_run.side_effect = KeyboardInterrupt
 
         # Should not raise exception
@@ -245,7 +245,7 @@ def test_http_streamable_method_handles_keyboard_interrupt(server_instance: Fabr
 
 def test_http_streamable_method_handles_cancelled_error(server_instance: FabricMCP):
     """Test that the http_streamable method handles CancelledError gracefully."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         mock_run.side_effect = CancelledError
 
         # Should not raise exception
@@ -256,7 +256,7 @@ def test_http_streamable_method_handles_cancelled_error(server_instance: FabricM
 
 def test_http_streamable_method_handles_would_block(server_instance: FabricMCP):
     """Test that the http_streamable method handles WouldBlock gracefully."""
-    with patch.object(server_instance.mcp, "run") as mock_run:
+    with patch.object(server_instance, "run") as mock_run:
         mock_run.side_effect = WouldBlock
 
         # Should not raise exception
