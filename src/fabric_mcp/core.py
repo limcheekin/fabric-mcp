@@ -240,6 +240,7 @@ class FabricMCP(FastMCP[None]):
             Raises:
                 McpError: For any API errors, connection issues, or parsing problems.
             """
+            _ = stream  # TODO: #36 remove this later when streaming is implemented
             try:
                 return self._execute_fabric_pattern(pattern_name, input_text, config)
             except RuntimeError as e:
