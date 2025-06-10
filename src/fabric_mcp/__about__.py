@@ -1,3 +1,3 @@
 "Version information for fabric_mcp."
 
-__version__ = "0.16.0"
+__version__ = "0.16.1"

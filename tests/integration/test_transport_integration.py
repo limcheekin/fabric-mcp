@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 from fastmcp import Client
-from fastmcp.client.transports import SSETransport, StreamableHttpTransport
+from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 
 from tests.shared.fabric_api.server import MOCK_PATTERNS
@@ -63,21 +63,15 @@ class TransportTestBase:
             url = self.get_server_url(config)
 
             async with httpx.AsyncClient() as http_client:
-                if self.transport_type == "sse":
-                    # SSE endpoints stream indefinitely, test with streaming
-                    async with http_client.stream("GET", url, timeout=2.0) as response:
-                        assert response.status_code in [200, 400, 406, 422]
-                else:
-                    # HTTP endpoints return normal responses
-                    response = await http_client.get(url)
-                    if self.transport_type == "http":
-                        # Expect 307 redirect or 406 without proper headers
-                        assert response.status_code in [307, 406]
-                        if response.status_code == 406:
-                            assert (
-                                "text/event-stream"
-                                in response.json()["error"]["message"]
-                            )
+                # HTTP endpoints return normal responses
+                response = await http_client.get(url)
+                if self.transport_type == "http":
+                    # Expect 307 redirect or 406 without proper headers
+                    assert response.status_code in [307, 406]
+                    if response.status_code == 406:
+                        assert (
+                            "text/event-stream" in response.json()["error"]["message"]
+                        )
 
     @pytest.mark.asyncio
     async def test_mcp_client_connection(self, server_config: ServerConfig) -> None:
@@ -381,110 +375,6 @@ class TestHTTPStreamableTransport(TransportTestBase):
 
 
 @pytest.mark.integration
-class TestSSETransport(TransportTestBase):
-    """Integration tests for SSE Transport."""
-
-    @pytest.fixture
-    def server_config(self) -> ServerConfig:
-        """Configuration for the SSE server."""
-        return {
-            "host": "127.0.0.1",
-            "port": find_free_port(),
-            "sse_path": "/sse",
-        }
-
-    @property
-    def transport_type(self) -> str:
-        """SSE transport type."""
-        return "sse"
-
-    def create_client(self, url: str) -> Client[Any]:
-        """Create SSE transport client."""
-        transport = SSETransport(url=url)
-        return Client(transport)
-
-    def get_server_url(self, config: ServerConfig) -> str:
-        """Build SSE server URL."""
-        return f"http://{config['host']}:{config['port']}{config['sse_path']}"
-
-    @pytest.mark.asyncio
-    async def test_custom_sse_endpoint_path(self) -> None:
-        """Test SSE server with custom endpoint path."""
-        custom_config: ServerConfig = {
-            "host": "127.0.0.1",
-            "port": find_free_port(),
-            "sse_path": "/custom-sse",
-        }
-
-        async with run_server(custom_config, "sse") as config:
-            url = self.get_server_url(config)
-            client = self.create_client(url)
-
-            async with client:
-                tools = await client.list_tools()
-                assert tools is not None
-                assert isinstance(tools, list)
-
-    @pytest.mark.asyncio
-    async def test_sse_server_graceful_shutdown(self) -> None:
-        """Test that SSE server shuts down gracefully."""
-        config: ServerConfig = {
-            "host": "127.0.0.1",
-            "port": find_free_port(),
-            "sse_path": "/sse",
-        }
-
-        server_process = None
-        try:
-            # Start server manually to test shutdown
-            with subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "fabric_mcp.cli",
-                    "--transport",
-                    "sse",
-                    "--host",
-                    config["host"],
-                    "--port",
-                    str(config["port"]),
-                    "--sse-path",
-                    config["sse_path"],
-                    "--log-level",
-                    "info",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            ) as server_process:
-                # Wait for server to start
-                await asyncio.sleep(0.5)
-
-                # Verify server is running
-                assert server_process.poll() is None
-
-                # Send SIGTERM for graceful shutdown
-                server_process.terminate()
-
-                # Server should exit gracefully within reasonable time
-                try:
-                    return_code = server_process.wait(timeout=3.0)
-                    # Return code should be negative (terminated by signal) or 0
-                    assert return_code in [0, -15], (
-                        f"Unexpected return code: {return_code}"
-                    )
-                except subprocess.TimeoutExpired:
-                    pytest.fail("Server did not shut down gracefully within timeout")
-
-        except Exception:
-            # If anything goes wrong, make sure we clean up
-            if server_process and server_process.poll() is None:
-                server_process.kill()
-                server_process.wait(timeout=1.0)
-            raise
-
-
-@pytest.mark.integration
 class TestTransportCLI:
     """Integration tests for CLI with different transports."""
 
@@ -499,7 +389,7 @@ class TestTransportCLI:
 
         assert result.returncode == 0
         assert "--transport" in result.stdout
-        assert "[stdio|http|sse]" in result.stdout
+        assert "[stdio|http]" in result.stdout
         assert "--host" in result.stdout
         assert "--port" in result.stdout
         assert "--mcp-path" in result.stdout
@@ -523,34 +413,3 @@ class TestTransportCLI:
 
         assert result.returncode == 2
         assert "only valid with --transport http" in result.stderr
-
-    def test_sse_transport_validation_with_invalid_port(self) -> None:
-        """Test that invalid SSE transport options are handled properly."""
-        with subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "fabric_mcp.cli",
-                "--transport",
-                "sse",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "99999",  # Invalid port
-                "--sse-path",
-                "/sse",
-                "--log-level",
-                "info",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ) as server_process:
-            # Wait for process to complete (should fail)
-            return_code = server_process.wait(timeout=5.0)
-            stdout, stderr = server_process.communicate()
-
-            # Should fail to start with invalid port
-            assert return_code != 0, (
-                f"Expected failure but got success. stdout: {stdout}, stderr: {stderr}"
-            )

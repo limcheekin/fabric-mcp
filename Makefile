@@ -123,7 +123,7 @@ mcp-inspector:
 	@echo "Starting MCP inspector server..."
 	@echo "Ensure you have the @modelcontextprotocol/inspector package installed."
 	@echo "If not, run 'make dev' to install it."
-	@echo "Start fabric-mcp in a different terminal window with the http or sse transport."
+	@echo "Start fabric-mcp in a different terminal window with the http transport."
 	@echo ""
 	$(NPX) @modelcontextprotocol/inspector
 
