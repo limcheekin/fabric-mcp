@@ -7,7 +7,7 @@ import click
 
 from fabric_mcp import __version__
 
-from .core import DEFAULT_MCP_HTTP_PATH, DEFAULT_MCP_SSE_PATH, FabricMCP
+from .core import DEFAULT_MCP_HTTP_PATH, FabricMCP
 from .utils import Log
 
 
@@ -19,7 +19,6 @@ class ServerConfig:
     host: str
     port: int
     mcp_path: str
-    sse_path: str
     log_level: str
 
 
@@ -46,22 +45,17 @@ def validate_http_options(
     return validate_transport_specific_option(ctx, param, value, ["http"])
 
 
-def validate_sse_options(ctx: click.Context, param: click.Parameter, value: Any) -> Any:
-    """Validate that SSE-specific options are only used with SSE transport."""
-    return validate_transport_specific_option(ctx, param, value, ["sse"])
-
-
 def validate_server_options(
     ctx: click.Context, param: click.Parameter, value: Any
 ) -> Any:
-    """Validate that server options are only used with HTTP or SSE transport."""
-    return validate_transport_specific_option(ctx, param, value, ["http", "sse"])
+    """Validate that server options are only used with HTTP transport."""
+    return validate_transport_specific_option(ctx, param, value, ["http"])
 
 
 @click.command()
 @click.option(
     "--transport",
-    type=click.Choice(["stdio", "http", "sse"]),
+    type=click.Choice(["stdio", "http"]),
     required=True,
     help="Transport mechanism to use for the MCP server.",
 )
@@ -70,7 +64,7 @@ def validate_server_options(
     default="127.0.0.1",
     show_default=True,
     callback=validate_server_options,
-    help="Host to bind the server to (HTTP and SSE transports only).",
+    help="Host to bind the server to (HTTP transport only).",
 )
 @click.option(
     "--port",
@@ -78,7 +72,7 @@ def validate_server_options(
     type=int,
     show_default=True,
     callback=validate_server_options,
-    help="Port to bind the server to (HTTP and SSE transports only).",
+    help="Port to bind the server to (HTTP transport only).",
 )
 @click.option(
     "--mcp-path",
@@ -86,13 +80,6 @@ def validate_server_options(
     show_default=True,
     callback=validate_http_options,
     help="MCP endpoint path (HTTP transport only).",
-)
-@click.option(
-    "--sse-path",
-    default=DEFAULT_MCP_SSE_PATH,
-    show_default=True,
-    callback=validate_sse_options,
-    help="SSE endpoint path (SSE transport only).",
 )
 @click.option(
     "-l",
@@ -110,7 +97,6 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     host: str,
     port: int,
     mcp_path: str,
-    sse_path: str,
     log_level: str,
 ) -> None:
     """A Model Context Protocol server for Fabric AI."""
@@ -119,7 +105,6 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         host=host,
         port=port,
         mcp_path=mcp_path,
-        sse_path=sse_path,
         log_level=log_level,
     )
     _run_server(config)
@@ -149,15 +134,6 @@ def _run_server(config: ServerConfig) -> None:
         fabric_mcp.http_streamable(
             host=config.host, port=config.port, mcp_path=config.mcp_path
         )
-    elif config.transport == "sse":
-        logger.info(
-            "Starting server with SSE transport at http://%s:%d%s (log level: %s)",
-            config.host,
-            config.port,
-            config.sse_path,
-            log.level_name,
-        )
-        fabric_mcp.sse(host=config.host, port=config.port, path=config.sse_path)
     logger.info("Server stopped.")
 
 

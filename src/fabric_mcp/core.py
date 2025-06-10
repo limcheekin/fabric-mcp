@@ -18,7 +18,6 @@ from .api_client import FabricApiClient
 from .config import get_default_model
 
 DEFAULT_MCP_HTTP_PATH = "/message"
-DEFAULT_MCP_SSE_PATH = "/sse"
 
 DEFAULT_VENDOR = "openai"
 DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
@@ -340,20 +339,6 @@ class FabricMCP(FastMCP[None]):
             self.mcp.run(
                 transport="streamable-http", host=host, port=port, path=mcp_path
             )
-        except (KeyboardInterrupt, CancelledError, WouldBlock) as e:
-            # Handle graceful shutdown
-            self.logger.debug("Exception details: %s: %s", type(e).__name__, e)
-            self.logger.info("Server stopped by user.")
-
-    def sse(
-        self,
-        host: str = "127.0.0.1",
-        port: int = 8000,
-        path: str = DEFAULT_MCP_SSE_PATH,
-    ):
-        """Run the MCP server with SSE transport."""
-        try:
-            self.mcp.run(transport="sse", host=host, port=port, path=path)
         except (KeyboardInterrupt, CancelledError, WouldBlock) as e:
             # Handle graceful shutdown
             self.logger.debug("Exception details: %s: %s", type(e).__name__, e)
