@@ -230,7 +230,7 @@ class FabricMCP(FastMCP[None]):
             config: Optional configuration for execution parameters.
 
         Returns:
-            dict[Any, Any]: Contains \\'output_format\\' and \\'output_text\\' fields.
+            dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
 
         Raises:
             McpError: For any API errors, connection issues, or parsing problems.
