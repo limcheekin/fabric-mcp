@@ -9,6 +9,8 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+import pytest_asyncio
+from fastmcp.tools import Tool
 from mcp import McpError
 
 from fabric_mcp.core import (
@@ -17,6 +19,7 @@ from fabric_mcp.core import (
     FabricMCP,
     PatternExecutionConfig,
 )
+from tests.shared.fabric_api.base import TestFixturesBase
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_mcp_error,
@@ -24,20 +27,16 @@ from tests.shared.fabric_api_mocks import (
 )
 
 
-class TestFabricRunPatternFixtureBase:
+class TestFabricRunPatternFixtureBase(TestFixturesBase):
     """Test cases for fabric_run_pattern tool SSE response handling."""
 
-    @pytest.fixture
-    def server_instance(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP()
-
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
+    @pytest_asyncio.fixture
+    async def fabric_run_pattern_tool(
+        self, mcp_tools: dict[str, Tool]
+    ) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from the server."""
-        tools = getattr(server_instance, "_FabricMCP__tools")
         # fabric_run_pattern is the 3rd tool (index 2)
-        return tools[2]
+        return getattr(mcp_tools["fabric_run_pattern"], "fn")
 
 
 class TestFabricRunPatternBasicExecution(TestFabricRunPatternFixtureBase):
@@ -273,13 +272,13 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool model and vendor inference."""
 
     @pytest.fixture
-    def server_instance_no_defaults(self) -> FabricMCP:
+    def server_no_defaults(self) -> FabricMCP:
         """Create a FabricMCP server instance with no default model/vendor."""
         with patch("fabric_mcp.core.get_default_model", return_value=(None, None)):
             return FabricMCP()
 
     @pytest.fixture
-    def server_instance_claude_model(self) -> FabricMCP:
+    def server_claude_model(self) -> FabricMCP:
         """Create a FabricMCP server instance with Claude model default."""
         with patch(
             "fabric_mcp.core.get_default_model",
@@ -288,7 +287,7 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
             return FabricMCP()
 
     @pytest.fixture
-    def server_instance_gpt_model(self) -> FabricMCP:
+    def server_gpt_model(self) -> FabricMCP:
         """Create a FabricMCP server instance with GPT model default."""
         with patch(
             "fabric_mcp.core.get_default_model",
@@ -296,36 +295,29 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
         ):
             return FabricMCP()
 
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, server_instance: FabricMCP) -> Callable[..., Any]:
-        """Get the fabric_run_pattern tool from the server."""
-        tools = getattr(server_instance, "_FabricMCP__tools")
-        # fabric_run_pattern is the 3rd tool (index 2)
-        return tools[2]
-
-    @pytest.fixture
-    def fabric_run_pattern_tool_no_defaults(
-        self, server_instance_no_defaults: FabricMCP
+    @pytest_asyncio.fixture
+    async def fabric_run_pattern_tool_no_defaults(
+        self, server_no_defaults: FabricMCP
     ) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from server with no defaults."""
-        tools = getattr(server_instance_no_defaults, "_FabricMCP__tools")
-        return tools[2]
+        tools = await server_no_defaults.get_tools()
+        return getattr(tools["fabric_run_pattern"], "fn")
 
-    @pytest.fixture
-    def fabric_run_pattern_tool_claude(
-        self, server_instance_claude_model: FabricMCP
+    @pytest_asyncio.fixture
+    async def fabric_run_pattern_tool_claude(
+        self, server_claude_model: FabricMCP
     ) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from server with Claude model."""
-        tools = getattr(server_instance_claude_model, "_FabricMCP__tools")
-        return tools[2]
+        tools = await server_claude_model.get_tools()
+        return getattr(tools["fabric_run_pattern"], "fn")
 
-    @pytest.fixture
-    def fabric_run_pattern_tool_gpt(
-        self, server_instance_gpt_model: FabricMCP
+    @pytest_asyncio.fixture
+    async def fabric_run_pattern_tool_gpt(
+        self, server_gpt_model: FabricMCP
     ) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from server with GPT model."""
-        tools = getattr(server_instance_gpt_model, "_FabricMCP__tools")
-        return tools[2]
+        tools = await server_gpt_model.get_tools()
+        return getattr(tools["fabric_run_pattern"], "fn")
 
     def test_pattern_not_found_500_error(
         self, fabric_run_pattern_tool: Callable[..., Any]

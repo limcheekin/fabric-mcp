@@ -11,10 +11,13 @@ from asyncio.exceptions import CancelledError
 from unittest.mock import patch
 
 import pytest
+import pytest_asyncio
+from fastmcp.tools import Tool
 from mcp import McpError
 
 from fabric_mcp import __version__
 from fabric_mcp.core import FabricMCP
+from tests.shared.fabric_api.base import TestFixturesBase
 from tests.shared.fabric_api.utils import (
     MockFabricAPIServer,
     fabric_api_server_fixture,
@@ -29,13 +32,18 @@ _ = fabric_api_server_fixture  # to get rid of unused variable warning
 
 
 @pytest.mark.integration
-class TestFabricMCPCore:
+class TestFabricMCPCore(TestFixturesBase):
     """Integration tests for core Fabric MCP Server functionality."""
 
     @pytest.fixture
     def server(self):
         """Create a FabricMCP server instance for testing."""
         return FabricMCP(log_level="DEBUG")
+
+    @pytest_asyncio.fixture
+    async def mcp_tools(self, server: FabricMCP):
+        """Get the MCP tools from the server."""
+        return await server.get_tools()
 
     @pytest.fixture
     def mock_fabric_api_response(self):
@@ -57,23 +65,22 @@ class TestFabricMCPCore:
     def test_server_initialization_and_configuration(self, server: FabricMCP):
         """Test server initialization and configuration."""
         assert server.log_level == "DEBUG"
-        assert server.mcp.name.startswith("Fabric MCP v")
+        assert server.name.startswith("Fabric MCP v")
         assert hasattr(server, "logger")
-        assert hasattr(server, "mcp")
-        assert server.mcp is not None
+        assert server is not None
 
-    def test_tool_registration_and_discovery(self, server: FabricMCP):
+    @pytest.mark.asyncio
+    async def test_tool_registration_and_discovery(self, mcp_tools: dict[str, Tool]):
         """Test that MCP tools are properly registered and discoverable."""
         # Check that tools are registered
-        tools = getattr(server, "_FabricMCP__tools", [])
-        assert len(tools) == 6
+        assert len(mcp_tools) == 6
 
         # Verify each tool is callable
-        for tool in tools:
-            assert callable(tool)
+        for tool in mcp_tools.values():
+            assert hasattr(tool, "fn") and callable(getattr(tool, "fn"))
 
         # Test specific tool functionality with mocking
-        list_patterns_tool = tools[0]
+        list_patterns_tool = getattr(mcp_tools["fabric_list_patterns"], "fn")
         builder = FabricApiMockBuilder().with_successful_pattern_list(
             COMMON_PATTERN_LIST
         )
@@ -82,7 +89,7 @@ class TestFabricMCPCore:
             assert isinstance(result, list)
             assert len(result) == 3
 
-        pattern_details_tool = tools[1]
+        pattern_details_tool = getattr(mcp_tools["fabric_get_pattern_details"], "fn")
         # Mock the FabricApiClient for pattern details test
         builder = FabricApiMockBuilder().with_successful_pattern_details(
             name="test_pattern",
@@ -95,15 +102,16 @@ class TestFabricMCPCore:
             assert "name" in result
 
     @pytest.mark.asyncio
-    async def test_fabric_list_patterns_with_mocked_api(self, server: FabricMCP):
+    async def test_fabric_list_patterns_with_mocked_api(
+        self, mcp_tools: dict[str, Tool]
+    ):
         """Test the fabric_list_patterns tool with mocked API calls."""
         patterns = ["analyze_claims", "summarize", "create_story"]
         builder = FabricApiMockBuilder().with_successful_pattern_list(patterns)
 
         with mock_fabric_api_client(builder) as mock_client:
             # Execute the tool
-            tools = getattr(server, "_FabricMCP__tools", [])
-            list_patterns_tool = tools[0]
+            list_patterns_tool = getattr(mcp_tools["fabric_list_patterns"], "fn")
             result: list[str] = list_patterns_tool()
 
             assert isinstance(result, list)
@@ -115,7 +123,9 @@ class TestFabricMCPCore:
             mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_fabric_pattern_details_with_mocked_api(self, server: FabricMCP):
+    async def test_fabric_pattern_details_with_mocked_api(
+        self, mcp_tools: dict[str, Tool]
+    ):
         """Test the fabric_get_pattern_details tool with mocked API calls."""
         builder = FabricApiMockBuilder().with_successful_pattern_details(
             name="analyze_claims",
@@ -125,8 +135,9 @@ class TestFabricMCPCore:
 
         with mock_fabric_api_client(builder) as mock_client:
             # Execute the tool
-            tools = getattr(server, "_FabricMCP__tools", [])
-            pattern_details_tool = tools[1]
+            pattern_details_tool = getattr(
+                mcp_tools["fabric_get_pattern_details"], "fn"
+            )
             result = pattern_details_tool("analyze_claims")
 
             # Verify response structure
@@ -143,7 +154,7 @@ class TestFabricMCPCore:
             mock_client.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_fabric_run_pattern_with_mocked_api(self, server: FabricMCP):
+    async def test_fabric_run_pattern_with_mocked_api(self, mcp_tools: dict[str, Tool]):
         """Test the fabric_run_pattern tool with mocked API calls."""
         # This test uses the real fabric_run_pattern implementation
         # which returns actual SSE parsed output, not hardcoded values
@@ -153,8 +164,7 @@ class TestFabricMCPCore:
 
         with mock_fabric_api_client(builder) as _:
             # Execute the tool (now uses real implementation)
-            tools = getattr(server, "_FabricMCP__tools", [])
-            run_pattern_tool = tools[2]
+            run_pattern_tool = getattr(mcp_tools["fabric_run_pattern"], "fn")
             result = run_pattern_tool(
                 pattern_name="analyze_claims",
                 input_text="Test input text",
@@ -169,7 +179,9 @@ class TestFabricMCPCore:
             )
 
     @pytest.mark.asyncio
-    async def test_error_handling_with_fabric_api_down(self, server: FabricMCP):
+    async def test_error_handling_with_fabric_api_down(
+        self, mcp_tools: dict[str, Tool]
+    ):
         """Test error handling when Fabric API is unavailable."""
         builder = FabricApiMockBuilder().with_connection_error(
             "Unable to connect to Fabric API"
@@ -177,8 +189,7 @@ class TestFabricMCPCore:
 
         with mock_fabric_api_client(builder) as _:
             # Test that the tool raises appropriate MCP error
-            tools = getattr(server, "_FabricMCP__tools", [])
-            list_patterns_tool = tools[0]
+            list_patterns_tool = getattr(mcp_tools["fabric_list_patterns"], "fn")
 
             with pytest.raises(McpError) as exc_info:
                 list_patterns_tool()
@@ -188,7 +199,9 @@ class TestFabricMCPCore:
             )
 
     @pytest.mark.asyncio
-    async def test_error_handling_with_fabric_api_error(self, server: FabricMCP):
+    async def test_error_handling_with_fabric_api_error(
+        self, mcp_tools: dict[str, Tool]
+    ):
         """Test error handling when Fabric API returns errors."""
         builder = FabricApiMockBuilder().with_http_error(
             status_code=500, response_text="Internal Server Error"
@@ -196,8 +209,7 @@ class TestFabricMCPCore:
 
         with mock_fabric_api_client(builder) as _:
             # Test that the tool raises appropriate MCP error
-            tools = getattr(server, "_FabricMCP__tools", [])
-            list_patterns_tool = tools[0]
+            list_patterns_tool = getattr(mcp_tools["fabric_list_patterns"], "fn")
 
             with pytest.raises(McpError) as exc_info:
                 list_patterns_tool()
@@ -206,7 +218,7 @@ class TestFabricMCPCore:
 
     def test_server_stdio_integration(self, server: FabricMCP):
         """Test the stdio method integration with mocked MCP run."""
-        with patch.object(server.mcp, "run") as mock_run:
+        with patch.object(server, "run") as mock_run:
             server.stdio()
             mock_run.assert_called_once()
 
@@ -216,11 +228,11 @@ class TestFabricMCPCore:
         """Test graceful shutdown on various interrupt signals."""
         with caplog.at_level(logging.INFO):
             # Test KeyboardInterrupt
-            with patch.object(server.mcp, "run", side_effect=KeyboardInterrupt):
+            with patch.object(server, "run", side_effect=KeyboardInterrupt):
                 server.stdio()
 
             # Test CancelledError
-            with patch.object(server.mcp, "run", side_effect=CancelledError):
+            with patch.object(server, "run", side_effect=CancelledError):
                 server.stdio()
 
         # Should have at least one graceful shutdown message
@@ -228,22 +240,22 @@ class TestFabricMCPCore:
 
     @pytest.mark.asyncio
     async def test_complete_pattern_workflow(
-        self, server: FabricMCP, mock_fabric_api_server: MockFabricAPIServer
+        self,
+        mcp_tools: dict[str, Tool],
+        mock_fabric_api_server: MockFabricAPIServer,
     ):
         """Test a complete workflow: list patterns -> get details -> run pattern."""
 
         _ = mock_fabric_api_server  # to get rid of unused variable warning
 
-        tools = getattr(server, "_FabricMCP__tools", [])
-
         # Step 1: List patterns
-        list_patterns_tool = tools[0]
+        list_patterns_tool = getattr(mcp_tools["fabric_list_patterns"], "fn")
         patterns: list[str] = list_patterns_tool()
         assert isinstance(patterns, list)
         assert len(patterns) > 0
 
         # Step 2: Get pattern details using a pattern that exists in mock server
-        pattern_details_tool = tools[1]
+        pattern_details_tool = getattr(mcp_tools["fabric_get_pattern_details"], "fn")
         details = pattern_details_tool("summarize")
         assert isinstance(details, dict)
         assert "name" in details
@@ -252,7 +264,7 @@ class TestFabricMCPCore:
         assert "system_prompt" in details
 
         # Step 3: Run pattern
-        run_pattern_tool = tools[2]
+        run_pattern_tool = getattr(mcp_tools["fabric_run_pattern"], "fn")
         result = run_pattern_tool("test_pattern", "Test input")
         assert isinstance(result, dict)
         assert "output_format" in result
@@ -262,13 +274,12 @@ class TestFabricMCPCore:
         """Test complete server lifecycle: init -> configure -> run -> shutdown."""
         # Server is already initialized via fixture
         assert server is not None
-        assert hasattr(server, "mcp")
 
         # Test configuration
         assert server.log_level == "DEBUG"
 
         # Test run with immediate shutdown
-        with patch.object(server.mcp, "run", side_effect=KeyboardInterrupt):
+        with patch.object(server, "run", side_effect=KeyboardInterrupt):
             server.stdio()
 
         # Server should handle shutdown gracefully

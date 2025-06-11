@@ -4,7 +4,6 @@ import importlib
 import logging
 
 import pytest
-from fastmcp import FastMCP
 
 # Import the module to test. This will execute the top-level code.
 # We need to be careful about side effects, especially logging configuration.
@@ -30,12 +29,6 @@ def test_logger_instance_creation():
 def test_fabric_mcp_server_instance_creation():
     """Test if the FabricMCPServer instance is created correctly."""
     assert isinstance(server_stdio_module.fabric_mcp, FabricMCP)
-
-
-def test_mcp_instance_creation():
-    """Test if the FastMCP instance is correctly referenced."""
-    assert isinstance(server_stdio_module.mcp, FastMCP)
-    assert server_stdio_module.mcp is server_stdio_module.fabric_mcp.mcp
 
 
 @pytest.mark.usefixtures("caplog")  # Use caplog fixture to capture logs
