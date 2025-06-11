@@ -219,7 +219,7 @@ class FabricMCP(FastMCP[None]):
         """
         Execute a Fabric pattern with input text and return complete output.
 
-        This tool calls the Fabric API\\'s /chat endpoint to execute a named pattern
+        This tool calls the Fabric API's /chat endpoint to execute a named pattern
         with the provided input text. Returns the complete LLM-generated output
         in a non-streaming manner (streaming parameter is ignored in this version).
 
