@@ -1,12 +1,13 @@
 """Unit tests for fabric_get_pattern_details tool."""
 
 from collections.abc import Callable
-from typing import Any
 
 import pytest
+import pytest_asyncio
 from mcp.shared.exceptions import McpError
 
 from fabric_mcp.core import FabricMCP
+from tests.shared.fabric_api.base import TestFixturesBase
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_api_client_calls,
@@ -15,21 +16,16 @@ from tests.shared.fabric_api_mocks import (
 )
 
 
-class TestFabricGetPatternDetails:
+class TestFabricGetPatternDetails(TestFixturesBase):
     """Test suite for fabric_get_pattern_details tool."""
 
-    @pytest.fixture
-    def server(self) -> FabricMCP:
-        """Create a FabricMCP server instance for testing."""
-        return FabricMCP(log_level="DEBUG")
-
-    @pytest.fixture
-    def get_pattern_details_tool(
+    @pytest_asyncio.fixture
+    async def get_pattern_details_tool(
         self, server: FabricMCP
     ) -> Callable[[str], dict[str, str]]:
         """Get the fabric_get_pattern_details tool function."""
-        tools: list[Callable[..., Any]] = getattr(server, "_FabricMCP__tools")
-        return tools[1]  # fabric_get_pattern_details is the second tool
+        tools = await server.get_tools()
+        return getattr(tools["fabric_get_pattern_details"], "fn")
 
     def test_successful_pattern_details_retrieval(
         self,

@@ -3,7 +3,6 @@
 import json
 import logging
 from asyncio.exceptions import CancelledError
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -45,7 +44,6 @@ class FabricMCP(FastMCP[None]):
         super().__init__(f"Fabric MCP v{__version__}")
         self.logger = logging.getLogger(__name__)
         self.log_level = log_level
-        self.__tools: list[Callable[..., Any]] = []
 
         # Load default model configuration from Fabric environment
         self._default_model: str | None = None
@@ -61,7 +59,6 @@ class FabricMCP(FastMCP[None]):
             self.fabric_list_strategies,
             self.fabric_get_configuration,
         ):
-            self.__tools.append(fn)
             self.tool(fn)
 
     def _load_default_config(self) -> None:
