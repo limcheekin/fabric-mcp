@@ -30,8 +30,10 @@ from tests.shared.fabric_api_mocks import (
 class TestFabricRunPatternFixtureBase(TestFixturesBase):
     """Test cases for fabric_run_pattern tool SSE response handling."""
 
-    @pytest.fixture
-    def fabric_run_pattern_tool(self, mcp_tools: dict[str, Tool]) -> Callable[..., Any]:
+    @pytest_asyncio.fixture
+    async def fabric_run_pattern_tool(
+        self, mcp_tools: dict[str, Tool]
+    ) -> Callable[..., Any]:
         """Get the fabric_run_pattern tool from the server."""
         # fabric_run_pattern is the 3rd tool (index 2)
         return getattr(mcp_tools["fabric_run_pattern"], "fn")
