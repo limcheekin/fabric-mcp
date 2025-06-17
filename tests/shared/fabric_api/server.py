@@ -154,6 +154,35 @@ MOCK_PATTERN_DETAILS = {
     },
 }
 
+# Mock strategies data that mimics real Fabric API responses
+MOCK_STRATEGIES = [
+    {
+        "name": "default",
+        "description": "Default strategy for pattern execution",
+        "prompt": "Execute the pattern with default settings and balanced parameters",
+    },
+    {
+        "name": "creative",
+        "description": "Creative strategy with "
+        "higher temperature for more varied output",
+        "prompt": "Execute the pattern with enhanced creativity and diverse thinking",
+    },
+    {
+        "name": "focused",
+        "description": "Focused strategy with lower temperature for consistent output",
+        "prompt": "Execute the pattern with precision and consistency in responses",
+    },
+    {
+        "name": "analytical",
+        "description": "Analytical strategy optimized for logical reasoning",
+        "prompt": "Execute the pattern with emphasis on logical analysis and "
+        "structured thinking",
+    },
+]
+
+# Empty strategies for testing empty response case
+EMPTY_STRATEGIES: list[dict[str, str]] = []
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):  # type: ignore[misc]
@@ -229,6 +258,27 @@ async def run_pattern(pattern_name: str, request_data: dict[str, Any]):
     }
 
     return mock_response
+
+
+@app.get("/strategies")
+async def list_strategies():
+    """Return list of available Fabric strategies.
+
+    This mimics the real Fabric API endpoint GET /strategies
+    """
+    logger.info("Serving strategies: %d strategies", len(MOCK_STRATEGIES))
+    return MOCK_STRATEGIES
+
+
+@app.get("/strategies/empty")
+async def list_empty_strategies():
+    """Return empty list of strategies for testing empty response case.
+
+    This is a special test endpoint that returns an empty strategies list
+    to verify the MCP tool handles the empty case correctly.
+    """
+    logger.info("Serving empty strategies list")
+    return EMPTY_STRATEGIES
 
 
 @app.post("/chat")

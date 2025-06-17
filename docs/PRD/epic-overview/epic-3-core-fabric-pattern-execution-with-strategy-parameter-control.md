@@ -38,11 +38,11 @@
     - User Story: As an MCP Client Developer, I want the `fabric_run_pattern` tool to support a `stream` parameter, which, when true, provides the Fabric pattern's output as a real-time stream, so that I can build more responsive and interactive client experiences.
     - Acceptance Criteria:
             1. Tool processes optional `stream: boolean` MCP parameter. `stream=true` initiates streaming; `stream=false`/omitted uses non-streaming.
-            2. When `stream=true`, `FabricApiClient` requests SSE stream from Fabric API. **Client MUST use SSE-compatible mechanism (e.g., `httpx-sse`) to consume and parse `text/event-stream` (`data:` fields) from Fabric API.**
-            3. Data chunks from Fabric API SSE events relayed to MCP client via `FastMCP` streaming over active transport (stdio, Streamable HTTP, SSE).
+            2. When `stream=true`, `FabricApiClient` requests streaming response from Fabric API. **Client MUST use HTTP streaming mechanism to consume and parse streaming response chunks from Fabric API.**
+            3. Data chunks from Fabric API streaming response relayed to MCP client via `FastMCP` streaming over active transport (stdio, Streamable HTTP).
             4. Real-time data transfer with minimal latency.
-            5. Handles errors during Fabric API SSE stream (e.g., invalid event, Fabric error mid-stream) by terminating MCP stream and sending MCP error.
-            6. Unit tests: mock `FabricApiClient` for `stream=true` configuring SSE consumption, receiving/processing SSE chunks, stream termination (success/error).
+            5. Handles errors during Fabric API streaming response (e.g., invalid chunk, Fabric error mid-stream) by terminating MCP stream and sending MCP error.
+            6. Unit tests: mock `FabricApiClient` for `stream=true` configuring streaming consumption, receiving/processing streaming chunks, stream termination (success/error).
             7. Integration tests: (vs. live local `fabric --serve`) execute streaming pattern with `stream=true`, verify multiple chunks and correct assembled output; confirm `stream=false` still works.
   - **Story 3.5: Add Support for `variables` and `attachments` to `fabric_run_pattern` Tool**
     - User Story: As an MCP Client Developer, I want to be able to pass `variables` (as a map of key-value strings) and `attachments` (as a list of file paths/URLs) to the `fabric_run_pattern` tool, so that I can execute more complex and context-rich Fabric patterns.

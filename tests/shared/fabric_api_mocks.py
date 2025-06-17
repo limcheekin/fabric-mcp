@@ -87,6 +87,34 @@ class FabricApiMockBuilder:
         self.mock_response.json.return_value = pattern_data
         return self
 
+    def with_successful_strategies_list(
+        self, strategies: list[dict[str, str]] | None = None
+    ) -> "FabricApiMockBuilder":
+        """Configure mock for successful strategies list response.
+
+        Args:
+            strategies: List of strategy objects. Defaults to common test strategies.
+
+        Returns:
+            Self for method chaining
+        """
+        if strategies is None:
+            strategies = [
+                {
+                    "name": "default",
+                    "description": "Default strategy for pattern execution",
+                    "prompt": "Execute the pattern with default settings",
+                },
+                {
+                    "name": "creative",
+                    "description": "Creative strategy with higher temperature",
+                    "prompt": "Execute the pattern with creative parameters",
+                },
+            ]
+
+        self.mock_response.json.return_value = strategies
+        return self
+
     def with_raw_response_data(self, data: Any) -> "FabricApiMockBuilder":
         """Configure mock to return raw response data (for testing mixed types).
 

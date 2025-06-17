@@ -1,5 +1,9 @@
 # 8. Change Log
 
+[Fabric GitHub][fabricGithubLink]
+
+[MCP][MCP]
+
 | Version | Date       | Author        | Description of Changes                                                                                                                               |
 | :------ | :--------- | :------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0.1   | 2025-05-27 | Kayvan Sylvan  | Format fixes. Table of Contents. |
