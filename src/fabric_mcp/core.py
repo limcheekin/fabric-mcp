@@ -287,21 +287,53 @@ class FabricMCP(FastMCP[None]):
 
     def fabric_list_strategies(self) -> dict[Any, Any]:
         """Retrieve available Fabric strategies."""
-        # This is a placeholder for the actual implementation
-        return {
-            "strategies": [
-                {
-                    "name": "default",
-                    "description": "Default strategy for pattern execution",
-                    "prompt": "Execute the pattern with default settings",
-                },
-                {
-                    "name": "creative",
-                    "description": "Creative strategy with higher temperature",
-                    "prompt": "Execute the pattern with creative parameters",
-                },
-            ]
-        }
+        # Use helper method for API request
+        response_data = self._make_fabric_api_request(
+            "/strategies", operation="retrieving strategies"
+        )
+
+        # Validate response is a list
+        if not isinstance(response_data, list):
+            error_msg = "Invalid response format from Fabric API: expected list"
+            raise McpError(
+                ErrorData(code=-32603, message=error_msg)  # Internal error
+            )
+
+        # Validate each strategy object and build response
+        validated_strategies: list[dict[str, str]] = []
+        for item in response_data:  # type: ignore[misc]
+            if isinstance(item, dict):
+                # Extract and validate required fields
+                item_dict = cast(dict[str, Any], item)
+                name = item_dict.get("name", "")
+                description = item_dict.get("description", "")
+                prompt = item_dict.get("prompt", "")
+
+                # Type check all fields as strings and ensure name/description not empty
+                if (
+                    isinstance(name, str)
+                    and isinstance(description, str)
+                    and isinstance(prompt, str)
+                    and name.strip()  # Name must not be empty/whitespace
+                    and description.strip()  # Description must not be empty/whitespace
+                    # Note: prompt can be empty string - that's valid
+                ):
+                    validated_strategies.append(
+                        {"name": name, "description": description, "prompt": prompt}
+                    )
+                else:
+                    # Log warning but continue with valid strategies
+                    self.logger.warning(
+                        "Strategy object missing required string fields: %s",
+                        cast(Any, item),
+                    )
+            else:
+                # Log warning but continue with valid strategies
+                item_any = cast(Any, item)
+                item_type = type(item_any).__name__ if item_any is not None else "None"
+                self.logger.warning("Non-dict strategy object found: %s", item_type)
+
+        return {"strategies": validated_strategies}
 
     def fabric_get_configuration(self) -> dict[Any, Any]:
         """Retrieve Fabric configuration with sensitive values redacted."""

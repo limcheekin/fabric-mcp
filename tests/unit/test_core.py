@@ -175,9 +175,21 @@ class TestCore(TestFixturesBase):
     def _test_list_strategies_tool(
         self, fabric_list_strategies: Callable[..., Any]
     ) -> None:
-        strategies_result = fabric_list_strategies()
-        assert isinstance(strategies_result, dict)
-        assert "strategies" in strategies_result
+        # Test fabric_list_strategies with mocked API
+        builder = FabricApiMockBuilder().with_successful_strategies_list()
+        with mock_fabric_api_client(builder):
+            strategies_result: dict[str, list[dict[str, str]]] = (
+                fabric_list_strategies()
+            )
+            assert isinstance(strategies_result, dict)
+            assert "strategies" in strategies_result
+            assert isinstance(strategies_result["strategies"], list)
+            strategies_list = strategies_result["strategies"]
+            # Verify structure of first strategy
+            first_strategy: dict[str, str] = strategies_list[0]
+            assert "name" in first_strategy
+            assert "description" in first_strategy
+            assert "prompt" in first_strategy
 
     def _test_get_configuration_tool(
         self, fabric_get_configuration: Callable[..., Any]

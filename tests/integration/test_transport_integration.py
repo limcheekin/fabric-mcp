@@ -217,9 +217,12 @@ class TransportTestBase:
 
     @pytest.mark.asyncio
     async def test_fabric_list_strategies_tool(
-        self, server_config: ServerConfig
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
     ) -> None:
         """Test fabric_list_strategies tool."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+
+        # Environment is automatically configured by fixture
         async with run_server(server_config, self.transport_type) as config:
             url = self.get_server_url(config)
             client = self.create_client(url)
