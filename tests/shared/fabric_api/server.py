@@ -306,13 +306,10 @@ async def chat_endpoint(request_data: dict[str, Any]):
         raise HTTPException(
             status_code=400, detail="Invalid request: 'prompts' must contain objects"
         )
-    if "patternName" not in prompt:
+    if "patternName" not in prompt or not isinstance(prompt["patternName"], str):
         raise HTTPException(
-            status_code=400, detail="Invalid request: 'patternName' required"
-        )
-    if not isinstance(prompt["patternName"], str):
-        raise HTTPException(
-            status_code=400, detail="Invalid request: 'patternName' must be a string"
+            status_code=400,
+            detail="Invalid request: 'patternName' must be present and a string",
         )
     # Extract pattern name with safe fallback and ensure it's a string
     pattern_name: str = prompt["patternName"]
