@@ -166,30 +166,37 @@ class FabricMCP(FastMCP[None]):
 
     def fabric_list_patterns(self) -> list[str]:
         """Return a list of available fabric patterns."""
-        # Use helper method for API request
         response_data = self._make_fabric_api_request(
             "/patterns/names", operation="retrieving patterns"
         )
 
-        # Validate response is a list
+        # Validate response data type
         if not isinstance(response_data, list):
-            error_msg = "Invalid response format from Fabric API: expected list"
             raise McpError(
-                ErrorData(code=-32603, message=error_msg)  # Internal error
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected list of patterns",
+                )
             )
 
-        # Ensure all items are strings
-        validated_patterns: list[str] = []
-        for item in response_data:  # type: ignore[misc]
-            if isinstance(item, str):
-                validated_patterns.append(item)
-            else:
-                # Log warning but continue with valid patterns
-                item_any = cast(Any, item)
-                item_type = type(item_any).__name__ if item_any is not None else "None"
-                self.logger.warning("Non-string pattern name found: %s", item_type)
+        # Cast to expected type
+        response_data = cast(list[Any], response_data)
 
-        return validated_patterns
+        for item in response_data:
+            # Ensure each item is a string
+            if not isinstance(item, str):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message="Invalid pattern name in response: "
+                        f"expected string, got {type(item).__name__}",
+                    )
+                )
+
+        patterns = cast(list[str], response_data)
+
+        return patterns
 
     def fabric_get_pattern_details(self, pattern_name: str) -> dict[str, str]:
         """Retrieve detailed information for a specific Fabric pattern."""
@@ -200,11 +207,32 @@ class FabricMCP(FastMCP[None]):
             operation="retrieving pattern details",
         )
 
+        # Validate response data type
+        if not isinstance(response_data, dict):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected dict for pattern details",
+                )
+            )
+
+        response_data = cast(dict[str, Any], response_data)
+
+        # Validate required fields in the response
+        if not all(key in response_data for key in ("Name", "Description", "Pattern")):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid pattern details response: missing required fields",
+                )
+            )
+
         # Transform Fabric API response to MCP expected format
         details = {
-            "name": response_data.get("Name", ""),
-            "description": response_data.get("Description", ""),
-            "system_prompt": response_data.get("Pattern", ""),
+            "name": response_data["Name"],
+            "description": response_data["Description"],
+            "system_prompt": response_data["Pattern"],
         }
 
         return details
@@ -213,8 +241,14 @@ class FabricMCP(FastMCP[None]):
         self,
         pattern_name: str,
         input_text: str = "",
-        stream: bool = False,  # Will be used later; pylint: disable=unused-argument
+        stream: bool = False,
         config: PatternExecutionConfig | None = None,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
     ) -> dict[Any, Any]:
         """
         Execute a Fabric pattern with input text and return complete output.
@@ -228,6 +262,12 @@ class FabricMCP(FastMCP[None]):
             input_text: The input text to be processed by the pattern (optional).
             stream: Whether to stream the output (ignored, always non-streaming).
             config: Optional configuration for execution parameters.
+            model_name: Optional model name override (e.g., "gpt-4", "claude-3-opus").
+            temperature: Optional temperature for LLM (0.0-2.0, controls randomness).
+            top_p: Optional top-p for LLM (0.0-1.0, nucleus sampling).
+            presence_penalty: Optional presence penalty (-2.0-2.0, reduces repetition).
+            frequency_penalty: Optional frequency penalty (-2.0-2.0, reduces frequency).
+            strategy_name: Optional strategy name for pattern execution.
 
         Returns:
             dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
@@ -236,8 +276,30 @@ class FabricMCP(FastMCP[None]):
             McpError: For any API errors, connection issues, or parsing problems.
         """
         _ = stream  # TODO: #36 remove this later when streaming is implemented
+
+        # Validate new parameters
+        self._validate_execution_parameters(
+            model_name,
+            temperature,
+            top_p,
+            presence_penalty,
+            frequency_penalty,
+            strategy_name,
+        )
+
+        # Merge parameters with config
+        merged_config = self._merge_execution_config(
+            config,
+            model_name,
+            temperature,
+            top_p,
+            presence_penalty,
+            frequency_penalty,
+            strategy_name,
+        )
+
         try:
-            return self._execute_fabric_pattern(pattern_name, input_text, config)
+            return self._execute_fabric_pattern(pattern_name, input_text, merged_config)
         except RuntimeError as e:
             error_message = str(e)
             # Check for pattern not found (500 with file not found message)
@@ -292,46 +354,56 @@ class FabricMCP(FastMCP[None]):
             "/strategies", operation="retrieving strategies"
         )
 
-        # Validate response is a list
+        # Validate response data type
         if not isinstance(response_data, list):
-            error_msg = "Invalid response format from Fabric API: expected list"
             raise McpError(
-                ErrorData(code=-32603, message=error_msg)  # Internal error
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected list of strategies",
+                )
             )
+
+        response_data = cast(list[Any], response_data)
+        # Ensure all items are dictionaries
+        for item in response_data:
+            if not isinstance(item, dict):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message="Invalid strategy object in response: "
+                        f"expected dict, got {type(item).__name__}",
+                    )
+                )
+
+        # Cast to expected type
+        response_data = cast(list[dict[str, Any]], response_data)
 
         # Validate each strategy object and build response
         validated_strategies: list[dict[str, str]] = []
-        for item in response_data:  # type: ignore[misc]
-            if isinstance(item, dict):
-                # Extract and validate required fields
-                item_dict = cast(dict[str, Any], item)
-                name = item_dict.get("name", "")
-                description = item_dict.get("description", "")
-                prompt = item_dict.get("prompt", "")
+        for item in response_data:
+            name = item.get("name", "")
+            description = item.get("description", "")
+            prompt = item.get("prompt", "")
 
-                # Type check all fields as strings and ensure name/description not empty
-                if (
-                    isinstance(name, str)
-                    and isinstance(description, str)
-                    and isinstance(prompt, str)
-                    and name.strip()  # Name must not be empty/whitespace
-                    and description.strip()  # Description must not be empty/whitespace
-                    # Note: prompt can be empty string - that's valid
-                ):
-                    validated_strategies.append(
-                        {"name": name, "description": description, "prompt": prompt}
-                    )
-                else:
-                    # Log warning but continue with valid strategies
-                    self.logger.warning(
-                        "Strategy object missing required string fields: %s",
-                        cast(Any, item),
-                    )
+            # Type check all fields as strings and ensure name/description not empty
+            if (
+                isinstance(name, str)
+                and isinstance(description, str)
+                and isinstance(prompt, str)
+                and name.strip()  # Name must not be empty/whitespace
+                and description.strip()  # Description must not be empty/whitespace
+                # Note: prompt can be empty string - that's valid
+            ):
+                validated_strategies.append(
+                    {"name": name, "description": description, "prompt": prompt}
+                )
             else:
                 # Log warning but continue with valid strategies
-                item_any = cast(Any, item)
-                item_type = type(item_any).__name__ if item_any is not None else "None"
-                self.logger.warning("Non-dict strategy object found: %s", item_type)
+                self.logger.warning(
+                    "Strategy object missing required string fields: %s",
+                    cast(Any, item),
+                )
 
         return {"strategies": validated_strategies}
 
@@ -517,3 +589,150 @@ class FabricMCP(FastMCP[None]):
             This method is primarily intended for testing and introspection.
         """
         return self._default_model, self._default_vendor
+
+    def _validate_numeric_parameter(
+        self, name: str, value: float | None, min_value: float, max_value: float
+    ) -> None:
+        """Validate a single parameter against its expected range.
+
+        Args:
+            name: The name of the parameter (for error messages)
+            value: The value of the parameter to validate
+            min_value: The minimum acceptable value
+            max_value: The maximum acceptable value
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        if value is not None:
+            try:
+                if not min_value <= value <= max_value:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message=f"{name} must be a number between"
+                            f" {min_value} and {max_value}",
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message=f"{name} must be a number between {min_value}"
+                        f" and {max_value}",
+                    )
+                ) from exc
+
+    def _validate_string_parameter(self, name: str, value: str | None) -> None:
+        """Validate a string parameter to ensure it is not empty.
+
+        Args:
+            name: The name of the parameter (for error messages)
+            value: The value of the parameter to validate
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        if value is not None and not value.strip():
+            raise McpError(
+                ErrorData(
+                    code=-32602,  # Invalid params
+                    message=f"{name} must be a non-empty string",
+                )
+            )
+
+    def _validate_execution_parameters(
+        self,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
+    ) -> None:
+        """Validate execution control parameters."""
+        # Validate temperature range
+        self._validate_numeric_parameter("temperature", temperature, 0.0, 2.0)
+
+        # Validate top_p range
+        self._validate_numeric_parameter("top_p", top_p, 0.0, 1.0)
+
+        # Validate presence_penalty range
+        self._validate_numeric_parameter(
+            "presence_penalty", presence_penalty, -2.0, 2.0
+        )
+
+        # Validate frequency_penalty range
+        self._validate_numeric_parameter(
+            "frequency_penalty", frequency_penalty, -2.0, 2.0
+        )
+
+        # Validate model_name format (basic validation - not empty string)
+        self._validate_string_parameter("model_name", model_name)
+
+        # Validate strategy_name format (basic validation - not empty string)
+        self._validate_string_parameter("strategy_name", strategy_name)
+
+    def _merge_execution_config(
+        self,
+        config: PatternExecutionConfig | None,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
+    ) -> PatternExecutionConfig:
+        """Merge execution parameters with existing config.
+
+        Parameters provided directly to the tool take precedence over
+        those in the config object.
+
+        Args:
+            config: Existing configuration (optional)
+            model_name: Model name override (optional)
+            temperature: Temperature override (optional)
+            top_p: Top-p override (optional)
+            presence_penalty: Presence penalty override (optional)
+            frequency_penalty: Frequency penalty override (optional)
+            strategy_name: Strategy name override (optional)
+
+        Returns:
+            Merged PatternExecutionConfig with parameter precedence
+        """
+        # Start with existing config or create new one
+        if config is None:
+            config = PatternExecutionConfig()
+
+        # Create new config with parameter precedence
+        return PatternExecutionConfig(
+            # Use the provided model_name if available; otherwise, fall back
+            # to the existing config's model_name
+            model_name=model_name or config.model_name,
+            # Use the provided strategy_name if available; otherwise, fall back
+            # to the existing config's strategy_name
+            strategy_name=strategy_name or config.strategy_name,
+            # Retain existing variables and attachments as they are not overridden
+            variables=config.variables,
+            attachments=config.attachments,
+            # Use the provided temperature if not None; otherwise, fall back
+            # to the existing config's temperature
+            temperature=temperature if temperature is not None else config.temperature,
+            # Use the provided top_p if not None; otherwise, fall back
+            # to the existing config's top_p
+            top_p=top_p if top_p is not None else config.top_p,
+            # Use the provided presence_penalty if not None; otherwise, fall back
+            # to the existing config's presence_penalty
+            presence_penalty=(
+                presence_penalty
+                if presence_penalty is not None
+                else config.presence_penalty
+            ),
+            # Use the provided frequency_penalty if not None; otherwise,
+            # fall back to the existing config's frequency_penalty
+            frequency_penalty=(
+                frequency_penalty
+                if frequency_penalty is not None
+                else config.frequency_penalty
+            ),
+        )

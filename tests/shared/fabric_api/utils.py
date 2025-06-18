@@ -11,7 +11,7 @@ import signal
 import time
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
-from types import TracebackType
+from types import FrameType, TracebackType
 
 import pytest
 import uvicorn
@@ -54,12 +54,12 @@ def run_mock_server_process(host: str, port: int) -> None:
     server = uvicorn.Server(config)
 
     # Handle shutdown gracefully
-    def signal_handler(signum: int, _frame) -> None:  # type: ignore[misc]
+    def signal_handler(signum: int, _frame: FrameType | None) -> None:
         logger.info("Mock server received signal %s, shutting down...", signum)
         server.should_exit = True
 
-    signal.signal(signal.SIGINT, signal_handler)  # type: ignore[arg-type]
-    signal.signal(signal.SIGTERM, signal_handler)  # type: ignore[arg-type]
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Run the server
     logger.info("Starting mock Fabric API server on %s:%s", host, port)

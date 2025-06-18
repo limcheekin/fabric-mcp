@@ -98,35 +98,6 @@ class TestFabricListStrategies:
             strategies = cast(list[dict[str, str]], result["strategies"])
             assert len(strategies) == 0
 
-    def test_fabric_list_strategies_invalid_response_format(
-        self, server: FabricMCP
-    ) -> None:
-        """Test handling of invalid response format (not a list)."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            # Setup mock client with invalid response
-            mock_client = Mock()
-            mock_response = Mock()
-            mock_response.json.return_value = {"error": "invalid"}  # Not a list
-            mock_client.get.return_value = mock_response
-            mock_client_class.return_value = mock_client
-
-            # Call should raise McpError
-            with pytest.raises(McpError) as exc_info:
-                server.fabric_list_strategies()
-
-            # Verify error details
-            assert_mcp_error(
-                exc_info,
-                expected_code=-32603,  # Internal error
-                expected_message_contains=(
-                    "Invalid response format from Fabric API: expected list"
-                ),
-            )
-
-            # Verify API call was made
-            mock_client.get.assert_called_once_with("/strategies")
-            mock_client.close.assert_called_once()
-
     def test_fabric_list_strategies_missing_fields(self, server: FabricMCP) -> None:
         """Test handling of strategy objects with missing required fields."""
         invalid_strategies = [
@@ -184,10 +155,8 @@ class TestFabricListStrategies:
                 "prompt": "Valid prompt",
             },
             "invalid_string_item",  # Non-dict item
-            None,  # None item
-            123,  # Number item
-            [],  # List item
         ]
+        bad_return = {"strategies": ["s1", "s2"]}  # Not a list of dicts
 
         with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
             # Setup mock client
@@ -197,21 +166,34 @@ class TestFabricListStrategies:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value = mock_client
 
-            # Call the method
-            result = server.fabric_list_strategies()
+            # Call should raise McpError
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_strategies()
 
-            # Verify API call
-            mock_client.get.assert_called_once_with("/strategies")
-            mock_client.close.assert_called_once()
+            # Verify error details
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,  # Internal error
+                expected_message_contains=(
+                    "Invalid strategy object in response: expected dict, got str"
+                ),
+            )
 
-            # Should only return valid dict strategies
-            assert isinstance(result, dict)
-            assert "strategies" in result
-            strategies = cast(list[dict[str, str]], result["strategies"])
-            assert len(strategies) == 1  # Only the valid strategy
+            mock_response.json.return_value = bad_return
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_strategies()
 
-            # Verify the valid strategy
-            assert strategies[0]["name"] == "valid_strategy"
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,  # Internal error
+                expected_message_contains=(
+                    "Invalid response from Fabric API: expected list of strategies"
+                ),
+            )
+
+            # Verify API call was attempted
+            assert mock_client.get.call_count == 2
+            assert mock_client.close.call_count == 2
 
     def test_fabric_list_strategies_non_string_fields(self, server: FabricMCP) -> None:
         """Test handling of strategy objects with non-string field values."""
@@ -262,7 +244,7 @@ class TestFabricListStrategies:
             # Verify the valid strategy
             assert strategies[0]["name"] == "valid_strategy"
 
-    def test_fabric_list_strategies_http_error(self, server: FabricMCP) -> None:
+    def test_fabric_commands_http_error(self, server: FabricMCP) -> None:
         """Test handling of HTTP errors from Fabric API."""
         with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
             # Setup mock client to raise HTTPStatusError
@@ -287,9 +269,19 @@ class TestFabricListStrategies:
                 expected_message_contains="Fabric API error",
             )
 
+            mock_response.text = "open /some/path/no such file or directory"
+            # Call should raise McpError
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_get_pattern_details("non_existent_pattern")
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32602,
+                expected_message_contains="Pattern 'non_existent_pattern' not found",
+            )
+
             # Verify API call was attempted
-            mock_client.get.assert_called_once_with("/strategies")
-            mock_client.close.assert_called_once()
+            assert mock_client.get.call_count == 2
+            assert mock_client.close.call_count == 2
 
     def test_fabric_list_strategies_request_error(self, server: FabricMCP) -> None:
         """Test handling of request errors (network issues)."""
