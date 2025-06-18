@@ -706,17 +706,30 @@ class FabricMCP(FastMCP[None]):
 
         # Create new config with parameter precedence
         return PatternExecutionConfig(
+            # Use the provided model_name if available; otherwise, fall back
+            # to the existing config's model_name
             model_name=model_name or config.model_name,
+            # Use the provided strategy_name if available; otherwise, fall back
+            # to the existing config's strategy_name
             strategy_name=strategy_name or config.strategy_name,
-            variables=config.variables,  # Keep existing variables/attachments
+            # Retain existing variables and attachments as they are not overridden
+            variables=config.variables,
             attachments=config.attachments,
+            # Use the provided temperature if not None; otherwise, fall back
+            # to the existing config's temperature
             temperature=temperature if temperature is not None else config.temperature,
+            # Use the provided top_p if not None; otherwise, fall back
+            # to the existing config's top_p
             top_p=top_p if top_p is not None else config.top_p,
+            # Use the provided presence_penalty if not None; otherwise, fall back
+            # to the existing config's presence_penalty
             presence_penalty=(
                 presence_penalty
                 if presence_penalty is not None
                 else config.presence_penalty
             ),
+            # Use the provided frequency_penalty if not None; otherwise,
+            # fall back to the existing config's frequency_penalty
             frequency_penalty=(
                 frequency_penalty
                 if frequency_penalty is not None
