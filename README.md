@@ -61,7 +61,7 @@ Imagine seamlessly using Fabric's specialized prompts for code explanation, refa
 
 This project is currently in the **implementation** phase.
 
-The core architecture and proposed tools are outlined in the [High-Level Design Document][design_doc].
+The core architecture and proposed tools are outlined in the [High-Level Architecture Document][architecture_doc].
 
 ```bash
 # you can also use pnpm if you prefer
@@ -177,8 +177,6 @@ For more details on transport configuration, see the [Infrastructure and Deploym
 
 ## Contributing
 
-Feedback on the [design document][design_doc] is highly welcome! Please open an issue to share your thoughts or suggestions.
-
 Read the [contribution document here](./docs/contributing.md) and please follow the guidelines for this repository.
 
 Also refer to the [cheat-sheet for contributors](./docs/contributing-cheatsheet.md) which contains a micro-summary of the
@@ -190,7 +188,7 @@ Copyright (c) 2025, [Kayvan Sylvan](kayvan@sylvan.com) Licensed under the [MIT L
 
 [fabricGithubLink]: https://github.com/danielmiessler/fabric
 [MCP]: https://modelcontextprotocol.io/
-[design_doc]: ./docs/design.md
+[architecture_doc]: ./docs/architecture/index.md
 [develop_publish_link]: https://github.com/ksylvan/fabric-mcp/actions/workflows/publish.yml?branch=develop
 [develop_publish]: https://github.com/ksylvan/fabric-mcp/actions/workflows/publish.yml/badge.svg?branch=develop
 [develop_tests_link]: https://github.com/ksylvan/fabric-mcp/actions/workflows/tests.yml?branch=develop

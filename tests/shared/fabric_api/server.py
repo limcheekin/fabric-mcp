@@ -286,7 +286,8 @@ async def chat_endpoint(request_data: dict[str, Any]):
     """Execute a chat request with patterns (streaming).
 
     This mimics the real Fabric API endpoint POST /chat that handles
-    Server-Sent Events (SSE) streaming responses.
+    Server-Sent Events (SSE) streaming responses. Enhanced to support
+    execution control parameters for Story 3.3.
     """
 
     # Validate request structure
@@ -300,21 +301,73 @@ async def chat_endpoint(request_data: dict[str, Any]):
             status_code=400, detail="Invalid request: at least one prompt required"
         )
 
-    prompt: dict[str, Any] = request_data["prompts"][0]  # type: ignore[assignment]
-
+    prompt: dict[str, Any] = request_data["prompts"][0]  # type: ignore
+    if not isinstance(prompt, dict):
+        raise HTTPException(
+            status_code=400, detail="Invalid request: 'prompts' must contain objects"
+        )
+    if "patternName" not in prompt:
+        raise HTTPException(
+            status_code=400, detail="Invalid request: 'patternName' required"
+        )
+    if not isinstance(prompt["patternName"], str):
+        raise HTTPException(
+            status_code=400, detail="Invalid request: 'patternName' must be a string"
+        )
     # Extract pattern name with safe fallback and ensure it's a string
-    pattern_name: str = ""
-    if "patternName" in prompt and prompt["patternName"]:
-        pattern_name = str(prompt["patternName"])  # type: ignore[arg-type]
+    pattern_name: str = prompt["patternName"]
 
     # Extract user input with safe fallback and ensure it's a string
-    user_input: str = ""
-    if "userInput" in prompt and prompt["userInput"]:
-        user_input = str(prompt["userInput"])  # type: ignore[arg-type]
+    user_input: str = (  # type: ignore[misc]
+        prompt["userInput"] if "userInput" in prompt else ""
+    )
+
+    # Extract new execution control parameters
+    model_name: str = prompt.get("model", "gpt-4o")  # type: ignore[misc]
+    vendor: str = prompt.get("vendor", "openai")  # type: ignore[misc]
+    strategy_name: str = prompt.get("strategyName", "")  # type: ignore[misc]
+
+    # Extract LLM parameters from root level
+    temperature: float = request_data.get("temperature", 0.7)
+    top_p: float = request_data.get("topP", 0.9)
+    frequency_penalty: float = request_data.get("frequencyPenalty", 0.0)
+    presence_penalty: float = request_data.get("presencePenalty", 0.0)
 
     if not pattern_name:
         raise HTTPException(
             status_code=400, detail="Invalid request: 'patternName' required"
+        )
+
+    # Validate model_name for testing parameter validation
+    if model_name == "invalid_model":
+        raise HTTPException(
+            status_code=400, detail="Invalid model: model not supported"
+        )
+
+    # Validate strategy_name for testing parameter validation
+    if strategy_name == "invalid_strategy":
+        raise HTTPException(
+            status_code=400, detail="Invalid strategy: strategy not found"
+        )
+
+    # Validate LLM parameters for testing parameter validation
+    if not 0.0 <= temperature <= 2.0:
+        raise HTTPException(
+            status_code=400, detail="Invalid temperature: must be between 0.0 and 2.0"
+        )
+    if not 0.0 <= top_p <= 1.0:
+        raise HTTPException(
+            status_code=400, detail="Invalid top_p: must be between 0.0 and 1.0"
+        )
+    if not -2.0 <= frequency_penalty <= 2.0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid frequency_penalty: must be between -2.0 and 2.0",
+        )
+    if not -2.0 <= presence_penalty <= 2.0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid presence_penalty: must be between -2.0 and 2.0",
         )
 
     # Check if pattern exists (for testing specific patterns)
@@ -324,19 +377,56 @@ async def chat_endpoint(request_data: dict[str, Any]):
         )
 
     logger.info(
-        "Chat endpoint: Running pattern '%s' with input length: %d",
+        (
+            "Chat endpoint: Running pattern '%s' with model '%s' (%s), "
+            "strategy '%s', temp=%.1f"
+        ),
         pattern_name,
-        len(user_input),
+        model_name,  # type: ignore[misc]
+        vendor,  # type: ignore[misc]
+        strategy_name or "",  # type: ignore[misc]
+        temperature,
     )
 
     def generate_sse_stream():
-        """Generate Server-Sent Events stream."""
-        # Mock streaming response chunks
+        """Generate Server-Sent Events stream with parameter-dependent responses."""
+        # Create parameter-aware response content
+        param_info: list[str] = []
+        if strategy_name:
+            param_info.append(f"strategy={strategy_name}")
+        if model_name != "gpt-4o":
+            param_info.append(f"model={model_name}")
+        if temperature != 0.7:
+            param_info.append(f"temp={temperature}")
+        if top_p != 0.9:
+            param_info.append(f"top_p={top_p}")
+        if frequency_penalty != 0.0:
+            param_info.append(f"freq_pen={frequency_penalty}")
+        if presence_penalty != 0.0:
+            param_info.append(f"pres_pen={presence_penalty}")
+
+        param_str = f" [{', '.join(param_info)}]" if param_info else ""
+
+        # Mock streaming response chunks that reflect execution parameters
         mock_content_chunks: list[str] = [
-            f"Mock {pattern_name} output for: ",
+            f"Mock {pattern_name} output{param_str} for: ",
             user_input[:30] if user_input else "empty input",
-            "...\n\nThis is a test response from the mock Fabric API server.",
+            f"...\n\nExecuted with {vendor}/{model_name}",
         ]
+
+        # Add strategy-specific content
+        if strategy_name == "creative":
+            mock_content_chunks.append(
+                "\n\n*Creative strategy applied - more diverse output*"
+            )
+        elif strategy_name == "focused":
+            mock_content_chunks.append(
+                "\n\n*Focused strategy applied - precise output*"
+            )
+        elif strategy_name == "analytical":
+            mock_content_chunks.append(
+                "\n\n*Analytical strategy applied - logical reasoning*"
+            )
 
         # Send content chunks
         for chunk in mock_content_chunks:

@@ -213,8 +213,14 @@ class FabricMCP(FastMCP[None]):
         self,
         pattern_name: str,
         input_text: str = "",
-        stream: bool = False,  # Will be used later; pylint: disable=unused-argument
+        stream: bool = False,
         config: PatternExecutionConfig | None = None,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
     ) -> dict[Any, Any]:
         """
         Execute a Fabric pattern with input text and return complete output.
@@ -228,6 +234,12 @@ class FabricMCP(FastMCP[None]):
             input_text: The input text to be processed by the pattern (optional).
             stream: Whether to stream the output (ignored, always non-streaming).
             config: Optional configuration for execution parameters.
+            model_name: Optional model name override (e.g., "gpt-4", "claude-3-opus").
+            temperature: Optional temperature for LLM (0.0-2.0, controls randomness).
+            top_p: Optional top-p for LLM (0.0-1.0, nucleus sampling).
+            presence_penalty: Optional presence penalty (-2.0-2.0, reduces repetition).
+            frequency_penalty: Optional frequency penalty (-2.0-2.0, reduces frequency).
+            strategy_name: Optional strategy name for pattern execution.
 
         Returns:
             dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
@@ -236,8 +248,30 @@ class FabricMCP(FastMCP[None]):
             McpError: For any API errors, connection issues, or parsing problems.
         """
         _ = stream  # TODO: #36 remove this later when streaming is implemented
+
+        # Validate new parameters
+        self._validate_execution_parameters(
+            model_name,
+            temperature,
+            top_p,
+            presence_penalty,
+            frequency_penalty,
+            strategy_name,
+        )
+
+        # Merge parameters with config
+        merged_config = self._merge_execution_config(
+            config,
+            model_name,
+            temperature,
+            top_p,
+            presence_penalty,
+            frequency_penalty,
+            strategy_name,
+        )
+
         try:
-            return self._execute_fabric_pattern(pattern_name, input_text, config)
+            return self._execute_fabric_pattern(pattern_name, input_text, merged_config)
         except RuntimeError as e:
             error_message = str(e)
             # Check for pattern not found (500 with file not found message)
@@ -517,3 +551,175 @@ class FabricMCP(FastMCP[None]):
             This method is primarily intended for testing and introspection.
         """
         return self._default_model, self._default_vendor
+
+    def _validate_execution_parameters(
+        self,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
+    ) -> None:
+        """Validate execution control parameters.
+
+        Args:
+            model_name: Model name to validate (optional)
+            temperature: Temperature parameter to validate (optional)
+            top_p: Top-p parameter to validate (optional)
+            presence_penalty: Presence penalty to validate (optional)
+            frequency_penalty: Frequency penalty to validate (optional)
+            strategy_name: Strategy name to validate (optional)
+
+        Raises:
+            McpError: If any parameter is invalid
+        """
+        # Validate temperature range
+        if temperature is not None:
+            try:
+                if not 0.0 <= temperature <= 2.0:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message="temperature must be a number between 0.0 and 2.0",
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="temperature must be a number between 0.0 and 2.0",
+                    )
+                ) from exc
+
+        # Validate top_p range
+        if top_p is not None:
+            try:
+                if not 0.0 <= top_p <= 1.0:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message="top_p must be a number between 0.0 and 1.0",
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="top_p must be a number between 0.0 and 1.0",
+                    )
+                ) from exc
+
+        # Validate presence_penalty range
+        if presence_penalty is not None:
+            try:
+                if not -2.0 <= presence_penalty <= 2.0:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message=(
+                                "presence_penalty must be a number between -2.0 and 2.0"
+                            ),
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message=(
+                            "presence_penalty must be a number between -2.0 and 2.0"
+                        ),
+                    )
+                ) from exc
+
+        # Validate frequency_penalty range
+        if frequency_penalty is not None:
+            try:
+                if not -2.0 <= frequency_penalty <= 2.0:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message=(
+                                "frequency_penalty must be a number "
+                                "between -2.0 and 2.0"
+                            ),
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message=(
+                            "frequency_penalty must be a number between -2.0 and 2.0"
+                        ),
+                    )
+                ) from exc
+
+        # Validate model_name format (basic validation - not empty string)
+        if model_name is not None and not model_name.strip():
+            raise McpError(
+                ErrorData(
+                    code=-32602,  # Invalid params
+                    message="model_name must be a non-empty string",
+                )
+            )
+
+        # Validate strategy_name format (basic validation - not empty string)
+        if strategy_name is not None and not strategy_name.strip():
+            raise McpError(
+                ErrorData(
+                    code=-32602,  # Invalid params
+                    message="strategy_name must be a non-empty string",
+                )
+            )
+
+    def _merge_execution_config(
+        self,
+        config: PatternExecutionConfig | None,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        strategy_name: str | None = None,
+    ) -> PatternExecutionConfig:
+        """Merge execution parameters with existing config.
+
+        Parameters provided directly to the tool take precedence over
+        those in the config object.
+
+        Args:
+            config: Existing configuration (optional)
+            model_name: Model name override (optional)
+            temperature: Temperature override (optional)
+            top_p: Top-p override (optional)
+            presence_penalty: Presence penalty override (optional)
+            frequency_penalty: Frequency penalty override (optional)
+            strategy_name: Strategy name override (optional)
+
+        Returns:
+            Merged PatternExecutionConfig with parameter precedence
+        """
+        # Start with existing config or create new one
+        if config is None:
+            config = PatternExecutionConfig()
+
+        # Create new config with parameter precedence
+        return PatternExecutionConfig(
+            model_name=model_name or config.model_name,
+            strategy_name=strategy_name or config.strategy_name,
+            variables=config.variables,  # Keep existing variables/attachments
+            attachments=config.attachments,
+            temperature=temperature if temperature is not None else config.temperature,
+            top_p=top_p if top_p is not None else config.top_p,
+            presence_penalty=(
+                presence_penalty
+                if presence_penalty is not None
+                else config.presence_penalty
+            ),
+            frequency_penalty=(
+                frequency_penalty
+                if frequency_penalty is not None
+                else config.frequency_penalty
+            ),
+        )

@@ -168,10 +168,9 @@ class TransportTestBase:
                 )
                 assert result is not None
                 assert isinstance(result, list)
-
-                output_text = result[0].text  # type: ignore[misc]
-                assert isinstance(output_text, str)
-                assert len(output_text) > 0
+                assert hasattr(result[0], "text")
+                assert isinstance(getattr(result[0], "text"), str)
+                assert len(getattr(result[0], "text")) > 0
 
     @pytest.mark.asyncio
     async def test_fabric_run_pattern_streaming_tool(
@@ -195,9 +194,274 @@ class TransportTestBase:
                 assert result is not None
                 assert isinstance(result, list)
 
-                output_text = result[0].text  # type: ignore[misc]
+                assert len(result) > 0
+                assert hasattr(result[0], "text")
+                assert isinstance(getattr(result[0], "text"), str)
+                # Ensure the output is not empty
+                output_text = getattr(result[0], "text")
                 assert isinstance(output_text, str)
                 assert len(output_text) > 0
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_with_model_name(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool with model_name parameter (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test with different model names
+                result_gpt4 = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "model_name": "gpt-4",
+                    },
+                )
+                assert result_gpt4 is not None
+                output_text_gpt4 = result_gpt4[0].text  # type: ignore[misc]
+                assert "gpt-4" in output_text_gpt4 or "openai" in output_text_gpt4
+
+                result_claude = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "model_name": "claude-3-opus",
+                    },
+                )
+                assert result_claude is not None
+                output_text_claude = result_claude[0].text  # type: ignore[misc]
+                assert "claude-3-opus" in output_text_claude
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_with_strategy_name(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool with strategy_name parameter (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test with different strategy names
+                result_creative = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "strategy_name": "creative",
+                    },
+                )
+                assert result_creative is not None
+                assert hasattr(result_creative[0], "text")
+                assert isinstance(getattr(result_creative[0], "text"), str)
+                output_text_creative = getattr(result_creative[0], "text")
+                assert isinstance(output_text_creative, str)
+                assert (
+                    "creative" in output_text_creative.lower()
+                    or "Creative strategy applied" in output_text_creative
+                )
+
+                result_analytical = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "strategy_name": "analytical",
+                    },
+                )
+                assert result_analytical is not None
+                assert hasattr(result_analytical[0], "text")
+                assert isinstance(getattr(result_analytical[0], "text"), str)
+                output_text_analytical = getattr(result_analytical[0], "text")
+                assert isinstance(output_text_analytical, str)
+                output_text_analytical: str = getattr(result_analytical[0], "text")
+                assert (
+                    "analytical" in output_text_analytical.lower()
+                    or "Analytical strategy applied" in output_text_analytical
+                )
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_with_llm_parameters(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool with LLM tuning parameters (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test with temperature parameter
+                result_temp = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "temperature": 1.5,
+                    },
+                )
+                assert result_temp is not None
+                output_text_temp = result_temp[0].text  # type: ignore[misc]
+                assert "temp=1.5" in output_text_temp
+
+                # Test with top_p parameter
+                result_top_p = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "top_p": 0.8,
+                    },
+                )
+                assert result_top_p is not None
+                output_text_top_p = result_top_p[0].text  # type: ignore[misc]
+                assert "top_p=0.8" in output_text_top_p
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_parameter_combinations(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool with multiple parameters (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test all parameters together
+                result = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "model_name": "gpt-4",
+                        "temperature": 0.8,
+                        "top_p": 0.95,
+                        "presence_penalty": 0.1,
+                        "frequency_penalty": -0.1,
+                        "strategy_name": "creative",
+                    },
+                )
+                assert result is not None
+                assert isinstance(result, list)
+                assert hasattr(result[0], "text")
+                assert isinstance(getattr(result[0], "text"), str)
+                assert len(getattr(result[0], "text")) > 0
+                output_text = getattr(result[0], "text")
+
+                # Verify multiple parameters are reflected in output
+                assert "gpt-4" in output_text
+                assert "temp=0.8" in output_text
+                assert "creative" in output_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_parameter_validation_errors(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool parameter validation (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test invalid temperature range
+                with pytest.raises(ToolError) as exc_info:
+                    await client.call_tool(
+                        "fabric_run_pattern",
+                        {
+                            "pattern_name": "test_pattern",
+                            "input_text": "test input",
+                            "temperature": 3.0,  # Invalid: > 2.0
+                        },
+                    )
+                assert "temperature must be a number between 0.0 and 2.0" in str(
+                    exc_info.value
+                )
+
+                # Test invalid top_p range
+                with pytest.raises(ToolError) as exc_info:
+                    await client.call_tool(
+                        "fabric_run_pattern",
+                        {
+                            "pattern_name": "test_pattern",
+                            "input_text": "test input",
+                            "top_p": 1.5,  # Invalid: > 1.0
+                        },
+                    )
+                assert "top_p must be a number between 0.0 and 1.0" in str(
+                    exc_info.value
+                )
+
+                # Test invalid model name (empty string)
+                with pytest.raises(ToolError) as exc_info:
+                    await client.call_tool(
+                        "fabric_run_pattern",
+                        {
+                            "pattern_name": "test_pattern",
+                            "input_text": "test input",
+                            "model_name": "",  # Invalid: empty string
+                        },
+                    )
+                assert "model_name must be a non-empty string" in str(exc_info.value)
+
+                # Test invalid strategy name (empty string)
+                with pytest.raises(ToolError) as exc_info:
+                    await client.call_tool(
+                        "fabric_run_pattern",
+                        {
+                            "pattern_name": "test_pattern",
+                            "input_text": "test input",
+                            "strategy_name": "",  # Invalid: empty string
+                        },
+                    )
+                assert "strategy_name must be a non-empty string" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_fabric_run_pattern_backward_compatibility(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
+        """Test fabric_run_pattern tool backward compatibility (Story 3.3)."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+        async with run_server(server_config, self.transport_type) as config:
+            url = self.get_server_url(config)
+            client = self.create_client(url)
+
+            async with client:
+                # Test original Story 3.1 call format (no new parameters)
+                result_basic = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                    },
+                )
+                assert result_basic is not None
+                output_text_basic = getattr(result_basic[0], "text")
+                assert len(output_text_basic) > 0
+
+                # Test with stream parameter (original format)
+                result_stream = await client.call_tool(
+                    "fabric_run_pattern",
+                    {
+                        "pattern_name": "test_pattern",
+                        "input_text": "test input",
+                        "stream": False,
+                    },
+                )
+                assert result_stream is not None
+                output_text_stream = getattr(result_stream[0], "text")
+                assert len(output_text_stream) > 0
+
+                # Both should work identically when no new parameters are used
+                # (Exact output may vary due to mock randomness)
 
     @pytest.mark.asyncio
     async def test_fabric_list_models_tool(self, server_config: ServerConfig) -> None:
