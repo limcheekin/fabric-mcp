@@ -532,6 +532,57 @@ class FabricMCP(FastMCP[None]):
         """
         return self._default_model, self._default_vendor
 
+    def _validate_numeric_parameter(
+        self, name: str, value: float | None, min_value: float, max_value: float
+    ) -> None:
+        """Validate a single parameter against its expected range.
+
+        Args:
+            name: The name of the parameter (for error messages)
+            value: The value of the parameter to validate
+            min_value: The minimum acceptable value
+            max_value: The maximum acceptable value
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        if value is not None:
+            try:
+                if not min_value <= value <= max_value:
+                    raise McpError(
+                        ErrorData(
+                            code=-32602,  # Invalid params
+                            message=f"{name} must be a number between"
+                            f" {min_value} and {max_value}",
+                        )
+                    )
+            except TypeError as exc:
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message=f"{name} must be a number between {min_value}"
+                        f" and {max_value}",
+                    )
+                ) from exc
+
+    def _validate_string_parameter(self, name: str, value: str | None) -> None:
+        """Validate a string parameter to ensure it is not empty.
+
+        Args:
+            name: The name of the parameter (for error messages)
+            value: The value of the parameter to validate
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        if value is not None and not value.strip():
+            raise McpError(
+                ErrorData(
+                    code=-32602,  # Invalid params
+                    message=f"{name} must be a non-empty string",
+                )
+            )
+
     def _validate_execution_parameters(
         self,
         model_name: str | None = None,
@@ -541,117 +592,28 @@ class FabricMCP(FastMCP[None]):
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
     ) -> None:
-        """Validate execution control parameters.
-
-        Args:
-            model_name: Model name to validate (optional)
-            temperature: Temperature parameter to validate (optional)
-            top_p: Top-p parameter to validate (optional)
-            presence_penalty: Presence penalty to validate (optional)
-            frequency_penalty: Frequency penalty to validate (optional)
-            strategy_name: Strategy name to validate (optional)
-
-        Raises:
-            McpError: If any parameter is invalid
-        """
+        """Validate execution control parameters."""
         # Validate temperature range
-        if temperature is not None:
-            try:
-                if not 0.0 <= temperature <= 2.0:
-                    raise McpError(
-                        ErrorData(
-                            code=-32602,  # Invalid params
-                            message="temperature must be a number between 0.0 and 2.0",
-                        )
-                    )
-            except TypeError as exc:
-                raise McpError(
-                    ErrorData(
-                        code=-32602,  # Invalid params
-                        message="temperature must be a number between 0.0 and 2.0",
-                    )
-                ) from exc
+        self._validate_numeric_parameter("temperature", temperature, 0.0, 2.0)
 
         # Validate top_p range
-        if top_p is not None:
-            try:
-                if not 0.0 <= top_p <= 1.0:
-                    raise McpError(
-                        ErrorData(
-                            code=-32602,  # Invalid params
-                            message="top_p must be a number between 0.0 and 1.0",
-                        )
-                    )
-            except TypeError as exc:
-                raise McpError(
-                    ErrorData(
-                        code=-32602,  # Invalid params
-                        message="top_p must be a number between 0.0 and 1.0",
-                    )
-                ) from exc
+        self._validate_numeric_parameter("top_p", top_p, 0.0, 1.0)
 
         # Validate presence_penalty range
-        if presence_penalty is not None:
-            try:
-                if not -2.0 <= presence_penalty <= 2.0:
-                    raise McpError(
-                        ErrorData(
-                            code=-32602,  # Invalid params
-                            message=(
-                                "presence_penalty must be a number between -2.0 and 2.0"
-                            ),
-                        )
-                    )
-            except TypeError as exc:
-                raise McpError(
-                    ErrorData(
-                        code=-32602,  # Invalid params
-                        message=(
-                            "presence_penalty must be a number between -2.0 and 2.0"
-                        ),
-                    )
-                ) from exc
+        self._validate_numeric_parameter(
+            "presence_penalty", presence_penalty, -2.0, 2.0
+        )
 
         # Validate frequency_penalty range
-        if frequency_penalty is not None:
-            try:
-                if not -2.0 <= frequency_penalty <= 2.0:
-                    raise McpError(
-                        ErrorData(
-                            code=-32602,  # Invalid params
-                            message=(
-                                "frequency_penalty must be a number "
-                                "between -2.0 and 2.0"
-                            ),
-                        )
-                    )
-            except TypeError as exc:
-                raise McpError(
-                    ErrorData(
-                        code=-32602,  # Invalid params
-                        message=(
-                            "frequency_penalty must be a number between -2.0 and 2.0"
-                        ),
-                    )
-                ) from exc
+        self._validate_numeric_parameter(
+            "frequency_penalty", frequency_penalty, -2.0, 2.0
+        )
 
         # Validate model_name format (basic validation - not empty string)
-        if model_name is not None and not model_name.strip():
-            raise McpError(
-                ErrorData(
-                    code=-32602,  # Invalid params
-                    message="model_name must be a non-empty string",
-                )
-            )
+        self._validate_string_parameter("model_name", model_name)
 
         # Validate strategy_name format (basic validation - not empty string)
-        if strategy_name is not None and not strategy_name.strip():
-            raise McpError(
-                ErrorData(
-                    code=-32602,  # Invalid params
-                    message="strategy_name must be a non-empty string",
-                )
-            )
+        self._validate_string_parameter("strategy_name", strategy_name)
 
     def _merge_execution_config(
         self,
