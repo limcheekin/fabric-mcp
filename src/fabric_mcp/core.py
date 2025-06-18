@@ -166,14 +166,39 @@ class FabricMCP(FastMCP[None]):
 
     def fabric_list_patterns(self) -> list[str]:
         """Return a list of available fabric patterns."""
-        # Use helper method for API request
-        response_data: list[str] = self._make_fabric_api_request(
+        response_data = self._make_fabric_api_request(
             "/patterns/names", operation="retrieving patterns"
         )
 
+        # Validate response data type
+        if not isinstance(response_data, list):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected list of patterns",
+                )
+            )
+
+        # Cast to expected type
+        response_data = cast(list[Any], response_data)
+
+        for item in response_data:
+            # Ensure each item is a string
+            if not isinstance(item, str):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message="Invalid pattern name in response: "
+                        f"expected string, got {type(item).__name__}",
+                    )
+                )
+
+        patterns = cast(list[str], response_data)
+
         # Ensure all items are strings
         validated_patterns: list[str] = []
-        for item in response_data:
+        for item in patterns:
             validated_patterns.append(item)
 
         return validated_patterns
@@ -187,11 +212,32 @@ class FabricMCP(FastMCP[None]):
             operation="retrieving pattern details",
         )
 
+        # Validate response data type
+        if not isinstance(response_data, dict):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected dict for pattern details",
+                )
+            )
+
+        response_data = cast(dict[str, Any], response_data)
+
+        # Validate required fields in the response
+        if not all(key in response_data for key in ("Name", "Description", "Pattern")):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid pattern details response: missing required fields",
+                )
+            )
+
         # Transform Fabric API response to MCP expected format
         details = {
-            "name": response_data.get("Name", ""),
-            "description": response_data.get("Description", ""),
-            "system_prompt": response_data.get("Pattern", ""),
+            "name": response_data["Name"],
+            "description": response_data["Description"],
+            "system_prompt": response_data["Pattern"],
         }
 
         return details
@@ -309,43 +355,60 @@ class FabricMCP(FastMCP[None]):
     def fabric_list_strategies(self) -> dict[Any, Any]:
         """Retrieve available Fabric strategies."""
         # Use helper method for API request
-        response_data: list[str] = self._make_fabric_api_request(
+        response_data = self._make_fabric_api_request(
             "/strategies", operation="retrieving strategies"
         )
+
+        # Validate response data type
+        if not isinstance(response_data, list):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid response from Fabric API: "
+                    "expected list of strategies",
+                )
+            )
+
+        response_data = cast(list[Any], response_data)
+        # Ensure all items are dictionaries
+        for item in response_data:
+            if not isinstance(item, dict):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message="Invalid strategy object in response: "
+                        f"expected dict, got {type(item).__name__}",
+                    )
+                )
+
+        # Cast to expected type
+        response_data = cast(list[dict[str, Any]], response_data)
 
         # Validate each strategy object and build response
         validated_strategies: list[dict[str, str]] = []
         for item in response_data:
-            if isinstance(item, dict):
-                # Extract and validate required fields
-                item_dict = cast(dict[str, Any], item)
-                name = item_dict.get("name", "")
-                description = item_dict.get("description", "")
-                prompt = item_dict.get("prompt", "")
+            name = item.get("name", "")
+            description = item.get("description", "")
+            prompt = item.get("prompt", "")
 
-                # Type check all fields as strings and ensure name/description not empty
-                if (
-                    isinstance(name, str)
-                    and isinstance(description, str)
-                    and isinstance(prompt, str)
-                    and name.strip()  # Name must not be empty/whitespace
-                    and description.strip()  # Description must not be empty/whitespace
-                    # Note: prompt can be empty string - that's valid
-                ):
-                    validated_strategies.append(
-                        {"name": name, "description": description, "prompt": prompt}
-                    )
-                else:
-                    # Log warning but continue with valid strategies
-                    self.logger.warning(
-                        "Strategy object missing required string fields: %s",
-                        cast(Any, item),
-                    )
+            # Type check all fields as strings and ensure name/description not empty
+            if (
+                isinstance(name, str)
+                and isinstance(description, str)
+                and isinstance(prompt, str)
+                and name.strip()  # Name must not be empty/whitespace
+                and description.strip()  # Description must not be empty/whitespace
+                # Note: prompt can be empty string - that's valid
+            ):
+                validated_strategies.append(
+                    {"name": name, "description": description, "prompt": prompt}
+                )
             else:
                 # Log warning but continue with valid strategies
-                item_any = cast(Any, item)
-                item_type = type(item_any).__name__ if item_any is not None else "None"
-                self.logger.warning("Non-dict strategy object found: %s", item_type)
+                self.logger.warning(
+                    "Strategy object missing required string fields: %s",
+                    cast(Any, item),
+                )
 
         return {"strategies": validated_strategies}
 
