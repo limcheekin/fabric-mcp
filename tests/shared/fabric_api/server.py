@@ -11,7 +11,8 @@ import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
-from typing import Any
+from types import FrameType
+from typing import Any, cast
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -185,7 +186,7 @@ EMPTY_STRATEGIES: list[dict[str, str]] = []
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):  # type: ignore[misc]
+async def lifespan(_app: FastAPI):
     """Application lifespan manager."""
     logger.info("Mock Fabric API server starting up...")
     yield
@@ -282,7 +283,7 @@ async def list_empty_strategies():
 
 
 @app.post("/chat")
-async def chat_endpoint(request_data: dict[str, Any]):
+async def chat_endpoint(request_data: dict[str, Any]) -> StreamingResponse:
     """Execute a chat request with patterns (streaming).
 
     This mimics the real Fabric API endpoint POST /chat that handles
@@ -301,11 +302,7 @@ async def chat_endpoint(request_data: dict[str, Any]):
             status_code=400, detail="Invalid request: at least one prompt required"
         )
 
-    prompt: dict[str, Any] = request_data["prompts"][0]  # type: ignore
-    if not isinstance(prompt, dict):
-        raise HTTPException(
-            status_code=400, detail="Invalid request: 'prompts' must contain objects"
-        )
+    prompt = cast(dict[str, Any], request_data["prompts"][0])
     if "patternName" not in prompt or not isinstance(prompt["patternName"], str):
         raise HTTPException(
             status_code=400,
@@ -315,14 +312,12 @@ async def chat_endpoint(request_data: dict[str, Any]):
     pattern_name: str = prompt["patternName"]
 
     # Extract user input with safe fallback and ensure it's a string
-    user_input: str = (  # type: ignore[misc]
-        prompt["userInput"] if "userInput" in prompt else ""
-    )
+    user_input: str = prompt["userInput"] if "userInput" in prompt else ""
 
     # Extract new execution control parameters
-    model_name: str = prompt.get("model", "gpt-4o")  # type: ignore[misc]
-    vendor: str = prompt.get("vendor", "openai")  # type: ignore[misc]
-    strategy_name: str = prompt.get("strategyName", "")  # type: ignore[misc]
+    model_name: str = prompt.get("model", "gpt-4o")
+    vendor: str = prompt.get("vendor", "openai")
+    strategy_name: str = prompt.get("strategyName", "")
 
     # Extract LLM parameters from root level
     temperature: float = request_data.get("temperature", 0.7)
@@ -379,9 +374,9 @@ async def chat_endpoint(request_data: dict[str, Any]):
             "strategy '%s', temp=%.1f"
         ),
         pattern_name,
-        model_name,  # type: ignore[misc]
-        vendor,  # type: ignore[misc]
-        strategy_name or "",  # type: ignore[misc]
+        model_name,
+        vendor,
+        strategy_name or "",
         temperature,
     )
 
@@ -463,7 +458,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8080):
     logger.info("Starting Mock Fabric API server on %s:%s", host, port)
 
     # Handle shutdown signals gracefully
-    def signal_handler(signum: int, _frame: Any) -> None:  # type: ignore[misc]
+    def signal_handler(signum: int, _frame: FrameType | None) -> None:
         logger.info("Received signal %s, shutting down...", signum)
         sys.exit(0)
 

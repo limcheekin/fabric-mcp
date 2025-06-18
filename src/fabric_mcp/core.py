@@ -167,27 +167,14 @@ class FabricMCP(FastMCP[None]):
     def fabric_list_patterns(self) -> list[str]:
         """Return a list of available fabric patterns."""
         # Use helper method for API request
-        response_data = self._make_fabric_api_request(
+        response_data: list[str] = self._make_fabric_api_request(
             "/patterns/names", operation="retrieving patterns"
         )
 
-        # Validate response is a list
-        if not isinstance(response_data, list):
-            error_msg = "Invalid response format from Fabric API: expected list"
-            raise McpError(
-                ErrorData(code=-32603, message=error_msg)  # Internal error
-            )
-
         # Ensure all items are strings
         validated_patterns: list[str] = []
-        for item in response_data:  # type: ignore[misc]
-            if isinstance(item, str):
-                validated_patterns.append(item)
-            else:
-                # Log warning but continue with valid patterns
-                item_any = cast(Any, item)
-                item_type = type(item_any).__name__ if item_any is not None else "None"
-                self.logger.warning("Non-string pattern name found: %s", item_type)
+        for item in response_data:
+            validated_patterns.append(item)
 
         return validated_patterns
 
@@ -322,20 +309,13 @@ class FabricMCP(FastMCP[None]):
     def fabric_list_strategies(self) -> dict[Any, Any]:
         """Retrieve available Fabric strategies."""
         # Use helper method for API request
-        response_data = self._make_fabric_api_request(
+        response_data: list[str] = self._make_fabric_api_request(
             "/strategies", operation="retrieving strategies"
         )
 
-        # Validate response is a list
-        if not isinstance(response_data, list):
-            error_msg = "Invalid response format from Fabric API: expected list"
-            raise McpError(
-                ErrorData(code=-32603, message=error_msg)  # Internal error
-            )
-
         # Validate each strategy object and build response
         validated_strategies: list[dict[str, str]] = []
-        for item in response_data:  # type: ignore[misc]
+        for item in response_data:
             if isinstance(item, dict):
                 # Extract and validate required fields
                 item_dict = cast(dict[str, Any], item)

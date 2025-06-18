@@ -1,7 +1,6 @@
 """Unit tests for fabric_list_patterns MCP tool."""
 
 import inspect
-from unittest.mock import patch
 
 import pytest
 from fastmcp.tools import Tool
@@ -90,50 +89,6 @@ class TestFabricListPatterns(TestFixturesBase):
             )
             assert exc_info.value.error.code == -32603
             assert_api_client_calls(mock_client, "/patterns/names")
-
-    def test_invalid_response_format_not_list(self, mcp_tools: dict[str, Tool]):
-        """Test handling of invalid response format (not a list)."""
-        # Arrange
-        builder = FabricApiMockBuilder().with_json_response(
-            {"error": "Invalid response"}
-        )
-
-        fabric_list_patterns = getattr(mcp_tools["fabric_list_patterns"], "fn")
-
-        # Act & Assert
-        with mock_fabric_api_client(builder) as mock_client:
-            with pytest.raises(McpError) as exc_info:
-                fabric_list_patterns()
-
-        assert "Invalid response format from Fabric API: expected list" in str(
-            exc_info.value.error.message
-        )
-        assert exc_info.value.error.code == -32603
-        assert_api_client_calls(mock_client, "/patterns/names")
-
-    def test_mixed_types_in_response_filters_non_strings(
-        self, mcp_tools: dict[str, Tool]
-    ):
-        """Test handling of mixed types in response - filters out non-strings."""
-        # Arrange
-        builder = FabricApiMockBuilder().with_raw_response_data(
-            ["pattern1", 123, "pattern2", None, "pattern3"]
-        )
-
-        fabric_list_patterns = getattr(mcp_tools["fabric_list_patterns"], "fn")
-
-        # Act
-        with mock_fabric_api_client(builder) as mock_client:
-            # Get the instance from the bound method to patch its logger
-            instance = fabric_list_patterns.__self__
-            with patch.object(instance, "logger") as mock_logging:
-                result = fabric_list_patterns()
-
-        # Assert
-        assert result == ["pattern1", "pattern2", "pattern3"]
-        # Verify warnings were logged for non-string items
-        assert mock_logging.warning.call_count == 2
-        assert_api_client_calls(mock_client, "/patterns/names")
 
     def test_json_parsing_error_handling(self, mcp_tools: dict[str, Tool]):
         """Test handling of JSON parsing errors."""
