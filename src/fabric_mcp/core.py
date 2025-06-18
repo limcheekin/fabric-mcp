@@ -196,12 +196,7 @@ class FabricMCP(FastMCP[None]):
 
         patterns = cast(list[str], response_data)
 
-        # Ensure all items are strings
-        validated_patterns: list[str] = []
-        for item in patterns:
-            validated_patterns.append(item)
-
-        return validated_patterns
+        return patterns
 
     def fabric_get_pattern_details(self, pattern_name: str) -> dict[str, str]:
         """Retrieve detailed information for a specific Fabric pattern."""
