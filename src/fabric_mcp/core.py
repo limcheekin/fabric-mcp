@@ -647,11 +647,6 @@ class FabricMCP(FastMCP[None]):
 
         # Check if we received no data at all
         if not has_data:
-            yield {
-                "type": "error",
-                "format": "text",
-                "content": "Empty SSE stream - no data received",
-            }
             raise RuntimeError("Empty SSE stream - no data received")
 
     def get_default_model_config(self) -> tuple[str | None, str | None]:
