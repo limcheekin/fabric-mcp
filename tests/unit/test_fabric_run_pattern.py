@@ -102,7 +102,7 @@ class TestFabricRunPatternBasicExecution(TestFabricRunPatternFixtureBase):
     def test_sse_response_with_empty_lines(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test SSE parsing with empty lines to cover line 630."""
+        """Test SSE parsing to ensure handling of empty lines in the response."""
         # Create SSE stream with empty lines mixed in
         sse_lines = [
             "",  # Empty line

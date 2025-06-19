@@ -747,7 +747,6 @@ class FabricMCP(FastMCP[None]):
         """
         # Type hints ensure correct type at call site
         # No additional runtime validation needed for well-typed parameters
-        pass
 
     def _validate_attachments_parameter(self, attachments: list[str] | None) -> None:
         """Validate an attachments parameter to ensure it is a list of strings.
@@ -760,7 +759,6 @@ class FabricMCP(FastMCP[None]):
         """
         # Type hints ensure correct type at call site
         # No additional runtime validation needed for well-typed parameters
-        pass
 
     def _validate_execution_parameters(
         self,
