@@ -641,12 +641,6 @@ class FabricMCP(FastMCP[None]):
 
                 except json.JSONDecodeError as e:
                     self.logger.warning("Failed to parse SSE JSON: %s", e)
-                    # Yield error for malformed SSE data
-                    yield {
-                        "type": "error",
-                        "format": "text",
-                        "content": f"Malformed SSE data: {e}",
-                    }
                     raise RuntimeError(f"Malformed SSE data: {e}") from e
 
         # Check if we received no data at all
