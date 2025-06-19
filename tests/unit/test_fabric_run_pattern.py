@@ -375,7 +375,7 @@ class TestFabricRunPatternStreaming(TestFabricRunPatternFixtureBase):
             assert content_chunks[1]["content"] == " Second"
             # Note: close() is called twice in this test (once for non-streaming, once
             # for streaming)
-            assert mock_api_client.close.call_count >= 1
+            assert mock_api_client.close.call_count == 2
 
 
 class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
