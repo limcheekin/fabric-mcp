@@ -24,6 +24,7 @@
 		"groq",
 		"HSTS",
 		"httpx",
+		"isinstance",
 		"isort",
 		"Jina",
 		"keepalive",

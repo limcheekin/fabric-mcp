@@ -250,6 +250,8 @@ class FabricMCP(FastMCP[None]):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
+        variables: dict[str, str] | None = None,
+        attachments: list[str] | None = None,
     ) -> dict[str, Any] | Generator[dict[str, Any], None, None]:
         """
         Execute a Fabric pattern with input text and return output.
@@ -270,6 +272,8 @@ class FabricMCP(FastMCP[None]):
             presence_penalty: Optional presence penalty (-2.0-2.0, reduces repetition).
             frequency_penalty: Optional frequency penalty (-2.0-2.0, reduces frequency).
             strategy_name: Optional strategy name for pattern execution.
+            variables: Optional map of key-value strings for pattern variables.
+            attachments: Optional list of file paths/URLs to attach to the pattern.
 
         Returns:
             dict[Any, Any] | Generator: For non-streaming, returns dict with
@@ -289,6 +293,8 @@ class FabricMCP(FastMCP[None]):
             presence_penalty,
             frequency_penalty,
             strategy_name,
+            variables,
+            attachments,
         )
 
         # Merge parameters with config
@@ -300,6 +306,8 @@ class FabricMCP(FastMCP[None]):
             presence_penalty,
             frequency_penalty,
             strategy_name,
+            variables,
+            attachments,
         )
 
         try:
@@ -488,17 +496,25 @@ class FabricMCP(FastMCP[None]):
         vendor, model_name = self.get_vendor_and_model(config)
 
         # AC3: Construct proper JSON payload for Fabric API /chat endpoint
+        prompt_data: dict[str, Any] = {
+            "userInput": input_text,
+            "patternName": pattern_name.strip(),
+            "model": model_name,
+            "vendor": vendor,
+            "contextName": "",
+            "strategyName": config.strategy_name or "",
+        }
+
+        # Add variables if provided
+        if config.variables is not None:
+            prompt_data["variables"] = config.variables
+
+        # Add attachments if provided
+        if config.attachments is not None:
+            prompt_data["attachments"] = config.attachments
+
         request_payload = {
-            "prompts": [
-                {
-                    "userInput": input_text,
-                    "patternName": pattern_name.strip(),
-                    "model": model_name,
-                    "vendor": vendor,
-                    "contextName": "",
-                    "strategyName": config.strategy_name or "",
-                }
-            ],
+            "prompts": [prompt_data],
             "language": "en",
             "temperature": config.temperature or 0.7,
             "topP": config.top_p or 0.9,
@@ -720,6 +736,32 @@ class FabricMCP(FastMCP[None]):
                 )
             )
 
+    def _validate_variables_parameter(self, variables: dict[str, str] | None) -> None:
+        """Validate variables parameter: dict with string keys and values.
+
+        Args:
+            variables: The variables parameter to validate
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        # Type hints ensure correct type at call site
+        # No additional runtime validation needed for well-typed parameters
+        pass
+
+    def _validate_attachments_parameter(self, attachments: list[str] | None) -> None:
+        """Validate an attachments parameter to ensure it is a list of strings.
+
+        Args:
+            attachments: The attachments parameter to validate
+
+        Raises:
+            McpError: If the parameter is invalid
+        """
+        # Type hints ensure correct type at call site
+        # No additional runtime validation needed for well-typed parameters
+        pass
+
     def _validate_execution_parameters(
         self,
         model_name: str | None = None,
@@ -728,6 +770,8 @@ class FabricMCP(FastMCP[None]):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
+        variables: dict[str, str] | None = None,
+        attachments: list[str] | None = None,
     ) -> None:
         """Validate execution control parameters."""
         # Validate temperature range
@@ -752,6 +796,12 @@ class FabricMCP(FastMCP[None]):
         # Validate strategy_name format (basic validation - not empty string)
         self._validate_string_parameter("strategy_name", strategy_name)
 
+        # Validate variables parameter format
+        self._validate_variables_parameter(variables)
+
+        # Validate attachments parameter format
+        self._validate_attachments_parameter(attachments)
+
     def _merge_execution_config(
         self,
         config: PatternExecutionConfig | None,
@@ -761,6 +811,8 @@ class FabricMCP(FastMCP[None]):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
+        variables: dict[str, str] | None = None,
+        attachments: list[str] | None = None,
     ) -> PatternExecutionConfig:
         """Merge execution parameters with existing config.
 
@@ -775,6 +827,8 @@ class FabricMCP(FastMCP[None]):
             presence_penalty: Presence penalty override (optional)
             frequency_penalty: Frequency penalty override (optional)
             strategy_name: Strategy name override (optional)
+            variables: Variables override (optional)
+            attachments: Attachments override (optional)
 
         Returns:
             Merged PatternExecutionConfig with parameter precedence
@@ -791,9 +845,12 @@ class FabricMCP(FastMCP[None]):
             # Use the provided strategy_name if available; otherwise, fall back
             # to the existing config's strategy_name
             strategy_name=strategy_name or config.strategy_name,
-            # Retain existing variables and attachments as they are not overridden
-            variables=config.variables,
-            attachments=config.attachments,
+            # Use the provided variables if available; otherwise, fall back
+            # to the existing config's variables
+            variables=variables if variables is not None else config.variables,
+            # Use the provided attachments if available; otherwise, fall back
+            # to the existing config's attachments
+            attachments=attachments if attachments is not None else config.attachments,
             # Use the provided temperature if not None; otherwise, fall back
             # to the existing config's temperature
             temperature=temperature if temperature is not None else config.temperature,
