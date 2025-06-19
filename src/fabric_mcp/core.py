@@ -250,7 +250,7 @@ class FabricMCP(FastMCP[None]):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
-    ) -> dict[Any, Any] | Generator[dict[str, Any], None, None]:
+    ) -> dict[str, Any] | Generator[dict[str, Any], None, None]:
         """
         Execute a Fabric pattern with input text and return output.
 
