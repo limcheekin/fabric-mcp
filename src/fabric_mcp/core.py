@@ -636,7 +636,6 @@ class FabricMCP(FastMCP[None]):
                     elif data.get("type") == "error":
                         # Yield error and end stream
                         error_msg = data.get("content", "Unknown Fabric API error")
-                        yield {"type": "error", "format": "text", "content": error_msg}
                         raise RuntimeError(f"Fabric API error: {error_msg}")
 
                 except json.JSONDecodeError as e:
