@@ -3,6 +3,7 @@
 import json
 import logging
 from asyncio.exceptions import CancelledError
+from collections.abc import Generator
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -249,18 +250,19 @@ class FabricMCP(FastMCP[None]):
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
         strategy_name: str | None = None,
-    ) -> dict[Any, Any]:
+    ) -> dict[Any, Any] | Generator[dict[str, Any], None, None]:
         """
-        Execute a Fabric pattern with input text and return complete output.
+        Execute a Fabric pattern with input text and return output.
 
         This tool calls the Fabric API's /chat endpoint to execute a named pattern
-        with the provided input text. Returns the complete LLM-generated output
-        in a non-streaming manner (streaming parameter is ignored in this version).
+        with the provided input text. Returns either complete output (non-streaming)
+        or a generator of chunks (streaming) based on the stream parameter.
 
         Args:
             pattern_name: The name of the fabric pattern to run (required).
             input_text: The input text to be processed by the pattern (optional).
-            stream: Whether to stream the output (ignored, always non-streaming).
+            stream: Whether to stream the output. If True, returns a generator of
+            chunks.
             config: Optional configuration for execution parameters.
             model_name: Optional model name override (e.g., "gpt-4", "claude-3-opus").
             temperature: Optional temperature for LLM (0.0-2.0, controls randomness).
@@ -270,12 +272,14 @@ class FabricMCP(FastMCP[None]):
             strategy_name: Optional strategy name for pattern execution.
 
         Returns:
-            dict[Any, Any]: Contains 'output_format' and 'output_text' fields.
+            dict[Any, Any] | Generator: For non-streaming, returns dict with
+            'output_format' and 'output_text'.
+            For streaming, returns a generator yielding dict chunks
+            with 'type', 'format', and 'content'.
 
         Raises:
             McpError: For any API errors, connection issues, or parsing problems.
         """
-        _ = stream  # TODO: #36 remove this later when streaming is implemented
 
         # Validate new parameters
         self._validate_execution_parameters(
@@ -299,7 +303,9 @@ class FabricMCP(FastMCP[None]):
         )
 
         try:
-            return self._execute_fabric_pattern(pattern_name, input_text, merged_config)
+            return self._execute_fabric_pattern(
+                pattern_name, input_text, merged_config, stream
+            )
         except RuntimeError as e:
             error_message = str(e)
             # Check for pattern not found (500 with file not found message)
@@ -464,7 +470,8 @@ class FabricMCP(FastMCP[None]):
         pattern_name: str,
         input_text: str,
         config: PatternExecutionConfig | None,
-    ) -> dict[Any, Any]:
+        stream: bool = False,
+    ) -> dict[Any, Any] | Generator[dict[str, Any], None, None]:
         """
         Execute a Fabric pattern against the API.
 
@@ -506,7 +513,12 @@ class FabricMCP(FastMCP[None]):
             response = api_client.post("/chat", json_data=request_payload)
             response.raise_for_status()  # Raise HTTPError for bad responses
 
-            return self._parse_sse_response(response)
+            if stream:
+                # Return generator for streaming mode
+                return self._parse_sse_stream(response)
+            else:
+                # Return accumulated result for non-streaming mode
+                return self._parse_sse_response(response)
 
         except httpx.ConnectError as e:
             self.logger.error("Failed to connect to Fabric API: %s", e)
@@ -578,6 +590,73 @@ class FabricMCP(FastMCP[None]):
             "output_format": output_format,
             "output_text": "".join(output_chunks),
         }
+
+    def _parse_sse_stream(
+        self, response: httpx.Response
+    ) -> Generator[dict[str, Any], None, None]:
+        """
+        Parse Server-Sent Events response from Fabric API in streaming mode.
+
+        Yields chunks in real-time as they arrive from the Fabric API.
+
+        Yields:
+            dict[str, Any]: Each chunk contains 'type', 'format', and 'content' fields.
+        """
+        has_data = False  # Track if we received any actual data
+
+        # Parse SSE response line by line
+        for line in response.iter_lines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # SSE lines start with "data: "
+            if line.startswith("data: "):
+                has_data = True
+                try:
+                    data = json.loads(line[6:])  # Remove "data: " prefix
+
+                    if data.get("type") == "content":
+                        # Yield content chunks in real-time
+                        yield {
+                            "type": "content",
+                            "format": data.get("format", "text"),
+                            "content": data.get("content", ""),
+                        }
+
+                    elif data.get("type") == "complete":
+                        # Yield completion signal and end stream
+                        yield {
+                            "type": "complete",
+                            "format": data.get("format", "text"),
+                            "content": data.get("content", ""),
+                        }
+                        return
+
+                    elif data.get("type") == "error":
+                        # Yield error and end stream
+                        error_msg = data.get("content", "Unknown Fabric API error")
+                        yield {"type": "error", "format": "text", "content": error_msg}
+                        raise RuntimeError(f"Fabric API error: {error_msg}")
+
+                except json.JSONDecodeError as e:
+                    self.logger.warning("Failed to parse SSE JSON: %s", e)
+                    # Yield error for malformed SSE data
+                    yield {
+                        "type": "error",
+                        "format": "text",
+                        "content": f"Malformed SSE data: {e}",
+                    }
+                    raise RuntimeError(f"Malformed SSE data: {e}") from e
+
+        # Check if we received no data at all
+        if not has_data:
+            yield {
+                "type": "error",
+                "format": "text",
+                "content": "Empty SSE stream - no data received",
+            }
+            raise RuntimeError("Empty SSE stream - no data received")
 
     def get_default_model_config(self) -> tuple[str | None, str | None]:
         """Get the current default model configuration.
