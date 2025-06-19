@@ -640,6 +640,15 @@ class FabricMCP(FastMCP[None]):
                         # Yield error and end stream
                         error_msg = data.get("content", "Unknown Fabric API error")
                         raise RuntimeError(f"Fabric API error: {error_msg}")
+                    else:
+                        # Handle unexpected types gracefully
+                        self.logger.warning(
+                            "Unexpected SSE type: %s", data.get("type", "unknown")
+                        )
+                        raise RuntimeError(
+                            "Unexpected SSE data type "
+                            f"received: {data.get('type', 'unknown')}"
+                        )
 
                 except json.JSONDecodeError as e:
                     self.logger.warning("Failed to parse SSE JSON: %s", e)
