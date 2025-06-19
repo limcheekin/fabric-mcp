@@ -601,6 +601,9 @@ class FabricMCP(FastMCP[None]):
 
         Yields:
             dict[str, Any]: Each chunk contains 'type', 'format', and 'content' fields.
+
+        Raises:
+            RuntimeError: If the SSE data is malformed or empty.
         """
         has_data = False  # Track if we received any actual data
 
