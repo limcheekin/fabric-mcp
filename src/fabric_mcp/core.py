@@ -736,7 +736,15 @@ class FabricMCP(FastMCP[None]):
                 )
             )
 
-    def _validate_variables_parameter(self, variables: dict[str, str] | None) -> None:
+    def _generator_dict_keys_values(
+        self, d: dict[Any, Any]
+    ) -> Generator[Any, None, None]:
+        """Yield each key and then each value from a dict as single objects."""
+        for key, value in d.items():
+            yield key
+            yield value
+
+    def _validate_variables_parameter(self, variables: Any | None) -> None:
         """Validate variables parameter: dict with string keys and values.
 
         Args:
@@ -745,10 +753,27 @@ class FabricMCP(FastMCP[None]):
         Raises:
             McpError: If the parameter is invalid
         """
-        # Type hints ensure correct type at call site
-        # No additional runtime validation needed for well-typed parameters
+        if variables is not None:
+            if not isinstance(variables, dict):
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="variables must be a dictionary",
+                    )
+                )
+            list_of_dict_stuff: list[Any] = list(
+                self._generator_dict_keys_values(cast(dict[Any, Any], variables))
+            )
+            if any(not isinstance(item, str) for item in list_of_dict_stuff):
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="variables must be a dictionary "
+                        "with string keys and values",
+                    )
+                )
 
-    def _validate_attachments_parameter(self, attachments: list[str] | None) -> None:
+    def _validate_attachments_parameter(self, attachments: Any | None) -> None:
         """Validate an attachments parameter to ensure it is a list of strings.
 
         Args:
@@ -757,8 +782,21 @@ class FabricMCP(FastMCP[None]):
         Raises:
             McpError: If the parameter is invalid
         """
-        # Type hints ensure correct type at call site
-        # No additional runtime validation needed for well-typed parameters
+        if attachments is not None:
+            if not isinstance(attachments, list):
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="attachments must be a list",
+                    )
+                )
+            if any(not isinstance(item, str) for item in cast(list[Any], attachments)):
+                raise McpError(
+                    ErrorData(
+                        code=-32602,  # Invalid params
+                        message="attachments must be a list of strings",
+                    )
+                )
 
     def _validate_execution_parameters(
         self,

@@ -123,33 +123,6 @@ class TestFabricRunPatternBasicExecution(TestFabricRunPatternFixtureBase):
             assert result["output_format"] == "text"
             mock_api_client.close.assert_called_once()
 
-    def test_unexpected_sse_data_type_forces_exception(
-        self, fabric_run_pattern_tool: Callable[..., Any]
-    ) -> None:
-        """Test to ensure unexpected SSE type definitely triggers exception."""
-        # Create SSE stream with ONLY unexpected type (no complete)
-        sse_lines = [
-            'data: {"type": "weird_unknown_type", "content": "test"}',
-        ]
-        builder = FabricApiMockBuilder().with_sse_lines(sse_lines)
-
-        with mock_fabric_api_client(builder) as mock_api_client:
-            # This should either raise an error or return empty result
-            try:
-                result = fabric_run_pattern_tool("test_pattern", "test input")
-                # If no exception, it should return empty content
-                assert result["output_text"] == ""
-                assert result["output_format"] == "text"
-            except McpError as e:
-                # If it raises, it should be about unexpected type or empty stream
-                error_msg = str(e)
-                assert (
-                    "Unexpected SSE data type" in error_msg
-                    or "Empty SSE stream" in error_msg
-                )
-
-            mock_api_client.close.assert_called_once()
-
 
 class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool error handling."""
@@ -1217,14 +1190,41 @@ class TestFabricRunPatternUnexpectedSSETypes(TestFabricRunPatternFixtureBase):
             assert_mcp_error(exc_info, -32603, "Pattern validation failed")
             mock_api_client.close.assert_called_once()
 
+    def test_unexpected_sse_data_type_forces_exception(
+        self, fabric_run_pattern_tool: Callable[..., Any]
+    ) -> None:
+        """Test to ensure unexpected SSE type definitely triggers exception."""
+        # Create SSE stream with ONLY unexpected type (no complete)
+        sse_lines = [
+            'data: {"type": "weird_unknown_type", "content": "test"}',
+        ]
+        builder = FabricApiMockBuilder().with_sse_lines(sse_lines)
+
+        with mock_fabric_api_client(builder) as mock_api_client:
+            # This should either raise an error or return empty result
+            try:
+                result = fabric_run_pattern_tool("test_pattern", "test input")
+                # If no exception, it should return empty content
+                assert result["output_text"] == ""
+                assert result["output_format"] == "text"
+            except McpError as e:
+                # If it raises, it should be about unexpected type or empty stream
+                error_msg = str(e)
+                assert (
+                    "Unexpected SSE data type" in error_msg
+                    or "Empty SSE stream" in error_msg
+                )
+
+            mock_api_client.close.assert_called_once()
+
 
 class TestFabricRunPatternCoverageTargets(TestFabricRunPatternFixtureBase):
     """Test cases to target specific missing coverage lines."""
 
-    def test_default_config_creation_line_494(
+    def test_default_config_creation_without_explicit_config(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test calling fabric_run_pattern without config to trigger line 494."""
+        """Test calling fabric_run_pattern without config to trigger defaults."""
         builder = FabricApiMockBuilder().with_successful_sse("Coverage test")
 
         with mock_fabric_api_client(builder) as mock_api_client:
