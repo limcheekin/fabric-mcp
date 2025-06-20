@@ -46,7 +46,7 @@ class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
         with pytest.raises(
             McpError, match="pattern_name is required and cannot be empty"
         ):
-            fabric_run_pattern_tool(None, "test input")  # type: ignore
+            fabric_run_pattern_tool(None, "test input")
 
     def test_empty_input_handling(
         self, fabric_run_pattern_tool: Callable[..., Any]

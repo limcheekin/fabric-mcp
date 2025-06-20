@@ -485,6 +485,30 @@ async def chat_endpoint(request_data: dict[str, Any]) -> StreamingResponse:
     )
 
 
+@app.get("/config")
+async def get_configuration() -> JSONResponse:
+    """Get Fabric configuration with test data including sensitive values.
+
+    This endpoint returns mock configuration data that includes various
+    API keys and sensitive values to test the redaction functionality.
+    """
+    mock_config = {
+        "openai_api_key": "sk-test123456789",
+        "anthropic_api_key": "ant-test987654321",
+        "google_api_key": "",  # Empty value to test pass-through
+        "fabric_token": "fabric_secret_token_123",
+        "database_secret": "db_secret_password",
+        "user_password": "test_user_password",
+        "empty_secret": "",  # Another empty value
+        "api_timeout": 30,  # Non-sensitive numeric value
+        "fabric_config_dir": "~/.config/fabric",  # Non-sensitive path
+        "default_model": "gpt-4",  # Non-sensitive string
+        "debug_mode": False,  # Non-sensitive boolean
+        "allowed_patterns": ["summarize", "analyze"],  # Non-sensitive list
+    }
+    return JSONResponse(content=mock_config)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(_request: Any, exc: Exception) -> JSONResponse:
     """Global exception handler."""

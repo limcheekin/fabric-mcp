@@ -481,7 +481,6 @@ class TransportTestBase:
                 assert len(models_text) > 0
 
                 # Validate the JSON structure
-                import json
 
                 models_data = json.loads(models_text)
                 assert "models" in models_data
@@ -525,9 +524,10 @@ class TransportTestBase:
 
     @pytest.mark.asyncio
     async def test_fabric_get_configuration_tool(
-        self, server_config: ServerConfig
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
     ) -> None:
         """Test fabric_get_configuration tool."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
         async with run_server(server_config, self.transport_type) as config:
             url = self.get_server_url(config)
             client = self.create_client(url)

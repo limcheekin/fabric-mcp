@@ -1,5 +1,6 @@
 """Core MCP server implementation using the Model Context Protocol."""
 
+import fnmatch
 import json
 import logging
 from asyncio.exceptions import CancelledError
@@ -21,6 +22,9 @@ DEFAULT_MCP_HTTP_PATH = "/message"
 
 DEFAULT_VENDOR = "openai"
 DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
+
+# Sensitive configuration key patterns for redaction
+SENSITIVE_CONFIG_PATTERNS = ["*_API_KEY", "*_TOKEN", "*_SECRET", "*_PASSWORD"]
 
 
 @dataclass
@@ -518,14 +522,40 @@ class FabricMCP(FastMCP[None]):
         return {"strategies": validated_strategies}
 
     def fabric_get_configuration(self) -> dict[Any, Any]:
-        """Retrieve Fabric configuration with sensitive values redacted."""
-        # This is a placeholder for the actual implementation
-        return {
-            "openai_api_key": "[REDACTED_BY_MCP_SERVER]",
-            "ollama_url": "http://localhost:11434",
-            "anthropic_api_key": "[REDACTED_BY_MCP_SERVER]",
-            "fabric_config_dir": "~/.config/fabric",
-        }
+        """Retrieve Fabric configuration with sensitive values redacted.
+
+        Returns:
+            dict[Any, Any]: Configuration key-value pairs with sensitive values
+            redacted. Sensitive keys (matching *_API_KEY, *_TOKEN, *_SECRET,
+            *_PASSWORD patterns) with non-empty values are replaced with
+            "[REDACTED_BY_MCP_SERVER]". Empty sensitive values and all
+            non-sensitive values are passed through unchanged.
+
+        Raises:
+            McpError: For any API errors, connection issues, or invalid responses.
+        """
+        # Get configuration from Fabric API
+        response_data = self._make_fabric_api_request(
+            "/config", operation="retrieving configuration"
+        )
+
+        # Validate response data type
+        if not isinstance(response_data, dict):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message=(
+                        "Invalid response from Fabric API: expected dict for config"
+                    ),
+                )
+            )
+
+        response_data = cast(dict[str, Any], response_data)
+
+        # Apply redaction to sensitive values
+        redacted_config = self._redact_sensitive_config_values(response_data)
+
+        return redacted_config
 
     def http_streamable(
         self,
@@ -786,6 +816,42 @@ class FabricMCP(FastMCP[None]):
             This method is primarily intended for testing and introspection.
         """
         return self._default_model, self._default_vendor
+
+    def _redact_sensitive_config_values(
+        self, config_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Redact sensitive configuration values based on key patterns.
+
+        Args:
+            config_data: Raw configuration data from Fabric API
+
+        Returns:
+            Configuration data with sensitive values redacted
+
+        Note:
+            - Sensitive keys with non-empty values are replaced with
+              "[REDACTED_BY_MCP_SERVER]"
+            - Sensitive keys with empty string values are passed through as empty
+            - Non-sensitive keys are always passed through unchanged
+        """
+
+        redacted_config: dict[str, Any] = {}
+
+        for key, value in config_data.items():
+            # Check if key matches any sensitive pattern
+            is_sensitive = any(
+                fnmatch.fnmatch(key.upper(), pattern.upper())
+                for pattern in SENSITIVE_CONFIG_PATTERNS
+            )
+
+            if is_sensitive and value != "":
+                # Redact non-empty sensitive values
+                redacted_config[key] = "[REDACTED_BY_MCP_SERVER]"
+            else:
+                # Pass through empty sensitive values and all non-sensitive values
+                redacted_config[key] = value
+
+        return redacted_config
 
     def _validate_numeric_parameter(
         self, name: str, value: float | None, min_value: float, max_value: float
