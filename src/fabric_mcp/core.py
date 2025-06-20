@@ -528,10 +528,16 @@ class FabricMCP(FastMCP[None]):
         request_payload = {
             "prompts": [prompt_data],
             "language": "en",
-            "temperature": config.temperature or 0.7,
-            "topP": config.top_p or 0.9,
-            "frequencyPenalty": config.frequency_penalty or 0.0,
-            "presencePenalty": config.presence_penalty or 0.0,
+            "temperature": config.temperature
+            if config.temperature is not None
+            else 0.7,
+            "topP": config.top_p if config.top_p is not None else 0.9,
+            "frequencyPenalty": config.frequency_penalty
+            if config.frequency_penalty is not None
+            else 0.0,
+            "presencePenalty": config.presence_penalty
+            if config.presence_penalty is not None
+            else 0.0,
         }
 
         # AC1: Use FabricApiClient to call Fabric's /chat endpoint
