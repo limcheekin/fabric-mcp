@@ -508,3 +508,42 @@ class TestFabricGetConfiguration(TestFixturesBase):
 
             # Should raise McpError about invalid response type
             assert "expected dict for config" in str(exc_info.value)
+
+    def test_fabric_get_configuration_api_key_value_redaction(self, server: FabricMCP):
+        """Test redaction of values that look like API keys regardless of key name."""
+        mock_config_data = {
+            # Real Fabric config format: vendor names as keys, API keys as values
+            "openai": "sk-1234567890abcdef",  # OpenAI API key prefix
+            "anthropic": "ant-api-key-12345",  # Anthropic API key prefix
+            "deepseek": "sk-deepseek123456",  # DeepSeek uses sk- prefix
+            "groq": "gsk_1234567890",  # Groq API key prefix
+            "grokai": "xai-grokai123456",  # Grokai API key prefix
+            "gemini": "AIzaSyABC123456",  # Google API key prefix
+            "openrouter": "sk-or-v1-1234567890",  # OpenRouter API key
+            "lmstudio": "",  # Empty value should pass through
+            "ollama": "",  # Empty value should pass through
+            "fabric_config_dir": "~/.config/fabric",  # Non-API key value
+            "debug_mode": True,  # Non-string value
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+
+        with mock_fabric_api_client(builder):
+            result = server.fabric_get_configuration()
+
+            # Verify API key values are redacted regardless of key name
+            assert result["openai"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["anthropic"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["deepseek"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["groq"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["grokai"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["gemini"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["openrouter"] == "[REDACTED_BY_MCP_SERVER]"
+
+            # Verify empty values are passed through
+            assert result["lmstudio"] == ""
+            assert result["ollama"] == ""
+
+            # Verify non-API key values are passed through
+            assert result["fabric_config_dir"] == "~/.config/fabric"
+            assert result["debug_mode"] is True

@@ -26,6 +26,9 @@ DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
 # Sensitive configuration key patterns for redaction
 SENSITIVE_CONFIG_PATTERNS = ["*_API_KEY", "*_TOKEN", "*_SECRET", "*_PASSWORD"]
 
+# API key prefixes that indicate a value is an API key regardless of key name
+API_KEY_PREFIXES = ["sk-", "ant-", "xai-", "gsk_", "AIza"]
+
 
 @dataclass
 class PatternExecutionConfig:  # pylint: disable=too-many-instance-attributes
@@ -820,7 +823,7 @@ class FabricMCP(FastMCP[None]):
     def _redact_sensitive_config_values(
         self, config_data: dict[str, Any]
     ) -> dict[str, Any]:
-        """Redact sensitive configuration values based on key patterns.
+        """Redact sensitive config values based on key patterns and value patterns.
 
         Args:
             config_data: Raw configuration data from Fabric API
@@ -831,6 +834,7 @@ class FabricMCP(FastMCP[None]):
         Note:
             - Sensitive keys with non-empty values are replaced with
               "[REDACTED_BY_MCP_SERVER]"
+            - Values that look like API keys (based on prefixes) are also redacted
             - Sensitive keys with empty string values are passed through as empty
             - Non-sensitive keys are always passed through unchanged
         """
@@ -839,13 +843,21 @@ class FabricMCP(FastMCP[None]):
 
         for key, value in config_data.items():
             # Check if key matches any sensitive pattern
-            is_sensitive = any(
+            key_is_sensitive = any(
                 fnmatch.fnmatch(key.upper(), pattern.upper())
                 for pattern in SENSITIVE_CONFIG_PATTERNS
             )
 
-            if is_sensitive and value != "":
-                # Redact non-empty sensitive values
+            # Check if value looks like an API key (only for string values)
+            value_is_api_key = False
+            if isinstance(value, str) and value:
+                value_is_api_key = any(
+                    value.startswith(prefix) for prefix in API_KEY_PREFIXES
+                )
+
+            # Redact if key is sensitive OR value looks like an API key
+            if (key_is_sensitive or value_is_api_key) and value != "":
+                # Redact non-empty sensitive values or API key values
                 redacted_config[key] = "[REDACTED_BY_MCP_SERVER]"
             else:
                 # Pass through empty sensitive values and all non-sensitive values
