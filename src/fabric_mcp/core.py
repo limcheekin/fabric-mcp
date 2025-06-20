@@ -354,6 +354,13 @@ class FabricMCP(FastMCP[None]):
                     message=f"Error executing pattern '{pattern_name}': {e}",
                 )
             ) from e
+        except ValueError as e:
+            raise McpError(
+                ErrorData(
+                    code=-32602,  # Invalid params
+                    message=f"Invalid parameter for pattern '{pattern_name}': {e}",
+                )
+            ) from e
 
     def fabric_list_models(self) -> dict[Any, Any]:
         """Retrieve configured Fabric models by vendor."""

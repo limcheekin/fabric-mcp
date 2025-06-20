@@ -29,24 +29,24 @@ class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
     def test_empty_pattern_name_validation(
         self, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
-        """Test that empty pattern name raises ValueError."""
+        """Test that empty pattern name raises McpError."""
         # Test empty string
         with pytest.raises(
-            ValueError, match="pattern_name is required and cannot be empty"
+            McpError, match="pattern_name is required and cannot be empty"
         ):
             fabric_run_pattern_tool("", "test input")
 
         # Test whitespace-only string
         with pytest.raises(
-            ValueError, match="pattern_name is required and cannot be empty"
+            McpError, match="pattern_name is required and cannot be empty"
         ):
             fabric_run_pattern_tool("   ", "test input")
 
         # Test None (though this might be caught by type system)
         with pytest.raises(
-            ValueError, match="pattern_name is required and cannot be empty"
+            McpError, match="pattern_name is required and cannot be empty"
         ):
-            fabric_run_pattern_tool(None, "test input")
+            fabric_run_pattern_tool(None, "test input")  # type: ignore
 
     def test_empty_input_handling(
         self, fabric_run_pattern_tool: Callable[..., Any]
