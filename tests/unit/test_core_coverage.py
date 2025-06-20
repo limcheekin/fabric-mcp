@@ -1,5 +1,6 @@
 """Unit tests for covering missed lines in core.py."""
 
+import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -193,7 +194,6 @@ class TestCoreCoverage(TestFixturesBase):
     # Test for lines 666-669: SSE error handling and unexpected types
     def test_fabric_run_pattern_sse_error_type(self, server: FabricMCP) -> None:
         """Test RuntimeError for SSE error type in streaming mode."""
-        import json
 
         with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
             mock_client = Mock()
@@ -212,7 +212,6 @@ class TestCoreCoverage(TestFixturesBase):
 
     def test_fabric_run_pattern_sse_unexpected_type(self, server: FabricMCP) -> None:
         """Test RuntimeError for unexpected SSE type in streaming mode."""
-        import json
 
         with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
             mock_client = Mock()
