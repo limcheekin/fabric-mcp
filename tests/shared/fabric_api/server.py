@@ -184,6 +184,30 @@ MOCK_STRATEGIES = [
 # Empty strategies for testing empty response case
 EMPTY_STRATEGIES: list[dict[str, str]] = []
 
+# Mock models data that mimics real Fabric API responses
+MOCK_MODELS = {
+    "models": [
+        "gpt-4o",
+        "gpt-3.5-turbo",
+        "claude-3-opus",
+        "claude-3-sonnet",
+        "claude-3-haiku",
+        "llama2",
+        "mixtral",
+    ],
+    "vendors": {
+        "openai": ["gpt-4o", "gpt-3.5-turbo"],
+        "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
+        "ollama": ["llama2", "mixtral"],
+    },
+}
+
+# Empty models for testing empty response case
+EMPTY_MODELS: dict[str, Any] = {
+    "models": [],
+    "vendors": {},
+}
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -280,6 +304,27 @@ async def list_empty_strategies():
     """
     logger.info("Serving empty strategies list")
     return EMPTY_STRATEGIES
+
+
+@app.get("/models/names")
+async def list_models():
+    """Return list of available Fabric models by vendor.
+
+    This mimics the real Fabric API endpoint GET /models/names
+    """
+    logger.info("Serving models: %d total models", len(MOCK_MODELS["models"]))
+    return MOCK_MODELS
+
+
+@app.get("/models/names/empty")
+async def list_empty_models():
+    """Return empty list of models for testing empty response case.
+
+    This is a special test endpoint that returns an empty models list
+    to verify the MCP tool handles the empty case correctly.
+    """
+    logger.info("Serving empty models list")
+    return EMPTY_MODELS
 
 
 @app.post("/chat")

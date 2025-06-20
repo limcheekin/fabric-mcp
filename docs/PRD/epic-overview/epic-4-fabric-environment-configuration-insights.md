@@ -13,7 +13,7 @@
             6. Returns structured MCP error for Fabric API errors or connection failures.
             7. Unit tests: mock `FabricApiClient` for success (models/vendors, empty), API errors.
             8. Integration tests: (vs. live local `fabric --serve`) verify response reflects local Fabric model config; test with no models if possible.
-  - **Story 4.3: Implement Secure `fabric_get_configuration` MCP Tool with Targeted Redaction**
+  - **Story 4.2: Implement Secure `fabric_get_configuration` MCP Tool with Targeted Redaction**
     - User Story: As an MCP Client Developer, I want to use the `fabric_get_configuration` tool to retrieve the current operational configuration settings of the connected Fabric instance, **with assurances that sensitive values like API keys are redacted**, so that I can display relevant non-sensitive settings or understand the Fabric environment's setup securely.
     - Acceptance Criteria:
             1. Tool implemented in `src/fabric_mcp/core.py`. Registered and advertised via `list_tools()` (no params, returns map/object) per `design.md`.

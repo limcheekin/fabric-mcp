@@ -460,8 +460,12 @@ class TransportTestBase:
                 # (Exact output may vary due to mock randomness)
 
     @pytest.mark.asyncio
-    async def test_fabric_list_models_tool(self, server_config: ServerConfig) -> None:
+    async def test_fabric_list_models_tool(
+        self, server_config: ServerConfig, mock_fabric_api_server: MockFabricAPIServer
+    ) -> None:
         """Test fabric_list_models tool."""
+        _ = mock_fabric_api_server  # eliminate unused variable warning
+
         async with run_server(server_config, self.transport_type) as config:
             url = self.get_server_url(config)
             client = self.create_client(url)
@@ -475,6 +479,28 @@ class TransportTestBase:
                 models_text = getattr(result[0], "text")
                 assert isinstance(models_text, str)
                 assert len(models_text) > 0
+
+                # Validate the JSON structure
+                import json
+
+                models_data = json.loads(models_text)
+                assert "models" in models_data
+                assert "vendors" in models_data
+                assert isinstance(models_data["models"], list)
+                assert isinstance(models_data["vendors"], dict)
+
+                # Verify some expected models are present
+                models = models_data["models"]
+                assert len(models) > 0
+                assert any("gpt" in model for model in models)
+                assert any("claude" in model for model in models)
+
+                # Verify vendor structure
+                vendors = models_data["vendors"]
+                assert "openai" in vendors
+                assert "anthropic" in vendors
+                assert isinstance(vendors["openai"], list)
+                assert isinstance(vendors["anthropic"], list)
 
     @pytest.mark.asyncio
     async def test_fabric_list_strategies_tool(
