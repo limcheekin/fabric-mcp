@@ -753,10 +753,10 @@ class FabricMCP(FastMCP[None]):
                         message="variables must be a dictionary",
                     )
                 )
-            list_of_dict_stuff: list[Any] = list(
+            variable_keys_and_values: list[Any] = list(
                 cast(list[Any], variables.values())
             ) + list(cast(list[Any], variables.keys()))
-            if any(not isinstance(item, str) for item in list_of_dict_stuff):
+            if any(not isinstance(item, str) for item in variable_keys_and_values):
                 raise McpError(
                     ErrorData(
                         code=-32602,  # Invalid params
