@@ -59,7 +59,9 @@ Imagine seamlessly using Fabric's specialized prompts for code explanation, refa
 
 ## Project Status
 
-This project is currently in the **implementation** phase.
+This project is feature-complete.
+
+The project was completed by using the [BMAD-METHOD (Breakthrough Method of Agile Ai-Driven Development)][bmad-method].
 
 The core architecture and proposed tools are outlined in the [High-Level Architecture Document][architecture_doc].
 
@@ -199,3 +201,4 @@ Copyright (c) 2025, [Kayvan Sylvan](kayvan@sylvan.com) Licensed under the [MIT L
 [main_publish]: https://github.com/ksylvan/fabric-mcp/actions/workflows/publish.yml/badge.svg
 [main_tests_link]: https://github.com/ksylvan/fabric-mcp/actions/workflows/tests.yml
 [main_tests]: https://github.com/ksylvan/fabric-mcp/actions/workflows/tests.yml/badge.svg
+[bmad-method]: https://github.com/bmadcode/BMAD-METHOD

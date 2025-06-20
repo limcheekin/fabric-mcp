@@ -215,9 +215,37 @@ class TestCore(TestFixturesBase):
     def _test_get_configuration_tool(
         self, fabric_get_configuration: Callable[..., Any]
     ) -> None:
-        config_result = fabric_get_configuration()
-        assert isinstance(config_result, dict)
-        assert "openai_api_key" in config_result
+        # Mock the configuration API response
+        mock_config_data = {
+            "openai_api_key": "sk-abc123def456",
+            "anthropic_api_key": "",  # Empty sensitive value
+            "ollama_url": "http://localhost:11434",
+            "regular_setting": "value123",
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+        with mock_fabric_api_client(builder):
+            config_result: dict[str, Any] = fabric_get_configuration()
+            assert isinstance(config_result, dict)
+            # Check that we have some configuration data
+            assert len(config_result) > 0
+            # Check that sensitive values are redacted when present
+            for key, value in config_result.items():
+                if (
+                    isinstance(value, str)
+                    and value
+                    and any(
+                        key.lower().find(pattern.replace("*", "")) != -1
+                        for pattern in [
+                            "*api_key*",
+                            "*token*",
+                            "*secret*",
+                            "*password*",
+                        ]
+                    )
+                ):
+                    # If it's a sensitive key with a value, it should be redacted
+                    assert value in ("[REDACTED_BY_MCP_SERVER]", "")
 
     def test_http_streamable_method_runs_mcp(self, server: FabricMCP):
         """Test that the http_streamable method calls mcp.run() with streamable-http."""
@@ -358,3 +386,181 @@ class TestCore(TestFixturesBase):
             model, vendor = server.get_default_model_config()
             assert model == "claude-3"
             assert vendor == "anthropic"
+
+
+class TestFabricGetConfiguration(TestFixturesBase):
+    """Test fabric_get_configuration tool implementation and redaction logic."""
+
+    def test_fabric_get_configuration_successful_call(self, server: FabricMCP):
+        """Test successful API call with mixed sensitive/non-sensitive config."""
+        mock_config_data = {
+            "openai_api_key": "sk-abc123def456",
+            "anthropic_api_key": "ant-abc123",
+            "google_api_key": "",  # Empty sensitive value
+            "ollama_url": "http://localhost:11434",
+            "fabric_config_dir": "~/.config/fabric",
+            "default_model": "gpt-4",
+            "custom_token": "secret123",
+            "user_password": "mypassword",
+            "empty_secret": "",
+            "regular_setting": "value123",
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+
+        with mock_fabric_api_client(builder) as mock_api:
+            result = server.fabric_get_configuration()
+
+            # Verify API was called correctly
+            mock_api.get.assert_called_once_with("/config")
+            mock_api.close.assert_called_once()
+
+            # Verify result structure
+            assert isinstance(result, dict)
+
+            # Verify redaction of sensitive keys with values
+            assert result["openai_api_key"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["anthropic_api_key"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["custom_token"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["user_password"] == "[REDACTED_BY_MCP_SERVER]"
+
+            # Verify empty sensitive values are passed through
+            assert result["google_api_key"] == ""
+            assert result["empty_secret"] == ""
+
+            # Verify non-sensitive values are passed through
+            assert result["ollama_url"] == "http://localhost:11434"
+            assert result["fabric_config_dir"] == "~/.config/fabric"
+            assert result["default_model"] == "gpt-4"
+            assert result["regular_setting"] == "value123"
+
+    def test_fabric_get_configuration_redaction_patterns(self, server: FabricMCP):
+        """Test redaction patterns work with various key formats."""
+        mock_config_data = {
+            "OPENAI_API_KEY": "value1",  # Uppercase
+            "stripe_api_key": "value2",  # Lowercase
+            "Custom_API_Key": "value3",  # Mixed case
+            "AUTH_TOKEN": "value4",
+            "refresh_token": "value5",
+            "DB_SECRET": "value6",
+            "app_secret": "value7",
+            "USER_PASSWORD": "value8",
+            "admin_password": "value9",
+            "some_setting": "value10",  # Non-sensitive
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+
+        with mock_fabric_api_client(builder):
+            result = server.fabric_get_configuration()
+
+            # Verify all sensitive patterns are redacted
+            assert result["OPENAI_API_KEY"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["stripe_api_key"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["Custom_API_Key"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["AUTH_TOKEN"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["refresh_token"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["DB_SECRET"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["app_secret"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["USER_PASSWORD"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["admin_password"] == "[REDACTED_BY_MCP_SERVER]"
+
+            # Verify non-sensitive value is passed through
+            assert result["some_setting"] == "value10"
+
+    def test_fabric_get_configuration_empty_sensitive_values(self, server: FabricMCP):
+        """Test that empty sensitive values are passed through, not redacted."""
+        mock_config_data = {
+            "openai_api_key": "",
+            "auth_token": "",
+            "db_secret": "",
+            "user_password": "",
+            "regular_setting": "",
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+
+        with mock_fabric_api_client(builder):
+            result = server.fabric_get_configuration()
+
+            # Verify empty sensitive values are NOT redacted
+            assert result["openai_api_key"] == ""
+            assert result["auth_token"] == ""
+            assert result["db_secret"] == ""
+            assert result["user_password"] == ""
+            assert result["regular_setting"] == ""
+
+    def test_fabric_get_configuration_api_connection_error(self, server: FabricMCP):
+        """Test handling of API connection errors."""
+        builder = FabricApiMockBuilder().with_connection_error()
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(Exception) as exc_info:
+                server.fabric_get_configuration()
+
+            # Should raise McpError with appropriate message
+            assert "Failed to connect to Fabric API" in str(exc_info.value)
+
+    def test_fabric_get_configuration_http_status_error(self, server: FabricMCP):
+        """Test handling of HTTP status errors (4xx, 5xx responses)."""
+        builder = FabricApiMockBuilder().with_http_error(500, "Internal Server Error")
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(Exception) as exc_info:
+                server.fabric_get_configuration()
+
+            # Should raise McpError with appropriate message
+            assert "Fabric API error during retrieving configuration: 500" in str(
+                exc_info.value
+            )
+
+    def test_fabric_get_configuration_invalid_response_type(self, server: FabricMCP):
+        """Test handling of invalid JSON response (non-dict)."""
+        # Mock API returning a list instead of dict
+        builder = FabricApiMockBuilder().with_raw_response_data(["not", "a", "dict"])
+
+        with mock_fabric_api_client(builder):
+            with pytest.raises(Exception) as exc_info:
+                server.fabric_get_configuration()
+
+            # Should raise McpError about invalid response type
+            assert "expected dict for config" in str(exc_info.value)
+
+    def test_fabric_get_configuration_api_key_value_redaction(self, server: FabricMCP):
+        """Test redaction of values that look like API keys regardless of key name."""
+        mock_config_data = {
+            # Real Fabric config format: vendor names as keys, API keys as values
+            "openai": "sk-1234567890abcdef",  # OpenAI API key prefix
+            "anthropic": "ant-api-key-12345",  # Anthropic API key prefix
+            "deepseek": "sk-deepseek123456",  # DeepSeek uses sk- prefix
+            "groq": "gsk_1234567890",  # Groq API key prefix
+            "grokai": "xai-grokai123456",  # Grokai API key prefix
+            "gemini": "AIzaSyABC123456",  # Google API key prefix
+            "openrouter": "sk-or-v1-1234567890",  # OpenRouter API key
+            "lmstudio": "",  # Empty value should pass through
+            "ollama": "",  # Empty value should pass through
+            "fabric_config_dir": "~/.config/fabric",  # Non-API key value
+            "debug_mode": True,  # Non-string value
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+
+        with mock_fabric_api_client(builder):
+            result = server.fabric_get_configuration()
+
+            # Verify API key values are redacted regardless of key name
+            assert result["openai"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["anthropic"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["deepseek"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["groq"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["grokai"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["gemini"] == "[REDACTED_BY_MCP_SERVER]"
+            assert result["openrouter"] == "[REDACTED_BY_MCP_SERVER]"
+
+            # Verify empty values are passed through
+            assert result["lmstudio"] == ""
+            assert result["ollama"] == ""
+
+            # Verify non-API key values are passed through
+            assert result["fabric_config_dir"] == "~/.config/fabric"
+            assert result["debug_mode"] is True

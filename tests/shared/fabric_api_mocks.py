@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, Mock, patch
 import httpx
 import pytest
 from mcp import McpError
+from mcp.types import INTERNAL_ERROR
 
 
 class FabricApiMockBuilder:
@@ -337,8 +338,13 @@ def mock_fabric_api_client(
 
     mock_api_client = builder.build()
 
-    with patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class:
-        mock_api_client_class.return_value = mock_api_client
+    # Patch both import locations where FabricApiClient is used
+    with (
+        patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_api_client_class1,
+        patch("fabric_mcp.core.FabricApiClient") as mock_api_client_class2,
+    ):
+        mock_api_client_class1.return_value = mock_api_client
+        mock_api_client_class2.return_value = mock_api_client
         yield mock_api_client
 
 
@@ -411,7 +417,7 @@ def test_error_scenario(
     test_function: Any,
     error_config_func: str,
     error_message_contains: str,
-    error_code: int = -32603,
+    error_code: int = INTERNAL_ERROR,
     **error_kwargs: Any,
 ) -> None:
     """Helper function for testing error scenarios with consistent pattern.
@@ -460,5 +466,5 @@ def assert_unexpected_error_test(
         with pytest.raises(McpError) as exc_info:
             test_function()
 
-    assert exc_info.value.error.code == -32603  # Internal error
+    assert exc_info.value.error.code == INTERNAL_ERROR
     assert error_message_contains in str(exc_info.value.error.message)

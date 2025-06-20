@@ -10,11 +10,14 @@ from typing import Any
 
 import pytest
 
+from tests.shared.fabric_api.utils import fabric_api_server_fixture
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     mock_fabric_api_client,
 )
 from tests.unit.test_fabric_run_pattern_base import TestFabricRunPatternFixtureBase
+
+_ = fabric_api_server_fixture  # to get rid of unused variable warning
 
 
 class TestFabricRunPatternStreaming(TestFabricRunPatternFixtureBase):

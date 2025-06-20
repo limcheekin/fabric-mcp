@@ -12,13 +12,11 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from mcp import McpError
+from mcp.types import INTERNAL_ERROR, INVALID_PARAMS
 
-from fabric_mcp.core import (
-    DEFAULT_MODEL,
-    DEFAULT_VENDOR,
-    FabricMCP,
-    PatternExecutionConfig,
-)
+from fabric_mcp.constants import DEFAULT_MODEL, DEFAULT_VENDOR
+from fabric_mcp.core import FabricMCP
+from fabric_mcp.models import PatternExecutionConfig
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_mcp_error,
@@ -178,7 +176,7 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
                 mock_api_client.close.assert_called_once()
 
             # Should be transformed to Invalid params error
-            assert exc_info.value.error.code == -32602
+            assert exc_info.value.error.code == INVALID_PARAMS
             assert (
                 "Pattern 'nonexistent_pattern' not found"
                 in exc_info.value.error.message
@@ -197,7 +195,7 @@ class TestFabricRunPatternModelInference(TestFabricRunPatternFixtureBase):
                 fabric_run_pattern_tool("test_pattern", "test input")
 
             error = exc_info.value
-            assert error.error.code == -32603  # Internal error
+            assert error.error.code == INTERNAL_ERROR  # Internal error
             assert "Database connection failed" in error.error.message
             client.close.assert_called_once()
 
@@ -511,7 +509,7 @@ class TestFabricRunPatternUnexpectedSSETypes(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Pattern validation failed")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Pattern validation failed")
             mock_api_client.close.assert_called_once()
 
     def test_unexpected_sse_data_type_forces_exception(
