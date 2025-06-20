@@ -28,6 +28,7 @@ class PatternExecutionConfig:  # pylint: disable=too-many-instance-attributes
     """Configuration for pattern execution parameters."""
 
     model_name: str | None = None
+    vendor_name: str | None = None
     strategy_name: str | None = None
     variables: dict[str, str] | None = None
     attachments: list[str] | None = None
@@ -245,6 +246,7 @@ class FabricMCP(FastMCP[None]):
         stream: bool = False,
         config: PatternExecutionConfig | None = None,
         model_name: str | None = None,
+        vendor_name: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
         presence_penalty: float | None = None,
@@ -267,6 +269,7 @@ class FabricMCP(FastMCP[None]):
             chunks.
             config: Optional configuration for execution parameters.
             model_name: Optional model name override (e.g., "gpt-4", "claude-3-opus").
+            vendor_name: Optional vendor name override (e.g., "openai", "anthropic").
             temperature: Optional temperature for LLM (0.0-2.0, controls randomness).
             top_p: Optional top-p for LLM (0.0-1.0, nucleus sampling).
             presence_penalty: Optional presence penalty (-2.0-2.0, reduces repetition).
@@ -288,6 +291,7 @@ class FabricMCP(FastMCP[None]):
         # Validate new parameters
         self._validate_execution_parameters(
             model_name,
+            vendor_name,
             temperature,
             top_p,
             presence_penalty,
@@ -301,6 +305,7 @@ class FabricMCP(FastMCP[None]):
         merged_config = self._merge_execution_config(
             config,
             model_name,
+            vendor_name,
             temperature,
             top_p,
             presence_penalty,
@@ -455,7 +460,7 @@ class FabricMCP(FastMCP[None]):
 
     def get_vendor_and_model(self, config: PatternExecutionConfig) -> tuple[str, str]:
         """Get the vendor and model based on the provided configuration."""
-        vendor_name = self._default_vendor
+        vendor_name = config.vendor_name or self._default_vendor
         if not vendor_name:
             self.logger.debug(
                 "Vendor name is None or empty. Set to hardcoded default vendor: %s",
@@ -793,6 +798,7 @@ class FabricMCP(FastMCP[None]):
     def _validate_execution_parameters(
         self,
         model_name: str | None = None,
+        _vendor_name: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
         presence_penalty: float | None = None,
@@ -834,6 +840,7 @@ class FabricMCP(FastMCP[None]):
         self,
         config: PatternExecutionConfig | None,
         model_name: str | None = None,
+        vendor_name: str | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
         presence_penalty: float | None = None,
@@ -870,6 +877,9 @@ class FabricMCP(FastMCP[None]):
             # Use the provided model_name if available; otherwise, fall back
             # to the existing config's model_name
             model_name=model_name or config.model_name,
+            # Use the provided vendor_name if available; otherwise, fall back
+            # to the existing config's vendor_name
+            vendor_name=vendor_name or config.vendor_name,
             # Use the provided strategy_name if available; otherwise, fall back
             # to the existing config's strategy_name
             strategy_name=strategy_name or config.strategy_name,
