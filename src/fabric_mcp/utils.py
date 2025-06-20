@@ -2,9 +2,25 @@
 
 import logging
 import os
+from typing import NoReturn
 
+from mcp.shared.exceptions import McpError
+from mcp.types import ErrorData
 from rich.console import Console
 from rich.logging import RichHandler
+
+
+def raise_mcp_error(e: Exception, code: int, message: str) -> NoReturn:
+    """Raise a generic MCP error.
+
+    This function always raises an exception and never returns.
+    """
+    raise McpError(
+        ErrorData(
+            code=code,
+            message=message,
+        )
+    ) from e
 
 
 class Log:

@@ -5,6 +5,7 @@ import inspect
 import pytest
 from fastmcp.tools import Tool
 from mcp.shared.exceptions import McpError
+from mcp.types import INTERNAL_ERROR
 
 from tests.shared.fabric_api.base import TestFixturesBase
 from tests.shared.fabric_api_mocks import (
@@ -68,7 +69,7 @@ class TestFabricListPatterns(TestFixturesBase):
             assert "Failed to connect to Fabric API" in str(
                 exc_info.value.error.message
             )
-            assert exc_info.value.error.code == -32603
+            assert exc_info.value.error.code == INTERNAL_ERROR
 
     def test_http_status_error_handling(self, mcp_tools: dict[str, Tool]):
         """Test handling of HTTP status errors (httpx.HTTPStatusError)."""
@@ -84,10 +85,11 @@ class TestFabricListPatterns(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_list_patterns()
 
-            assert "Fabric API error: 500 Internal Server Error" in str(
-                exc_info.value.error.message
+            assert (
+                "Fabric API error during retrieving patterns: 500 Internal Server Error"
+                in str(exc_info.value.error.message)
             )
-            assert exc_info.value.error.code == -32603
+            assert exc_info.value.error.code == INTERNAL_ERROR
             assert_api_client_calls(mock_client, "/patterns/names")
 
     def test_json_parsing_error_handling(self, mcp_tools: dict[str, Tool]):
@@ -105,7 +107,7 @@ class TestFabricListPatterns(TestFixturesBase):
         assert "Unexpected error during retrieving patterns" in str(
             exc_info.value.error.message
         )
-        assert exc_info.value.error.code == -32603
+        assert exc_info.value.error.code == INTERNAL_ERROR
         assert_api_client_calls(mock_client, "/patterns/names")
 
     def test_unexpected_exception_handling(self, mcp_tools: dict[str, Tool]):

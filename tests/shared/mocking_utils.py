@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, Mock
 import httpx
 import pytest
 from mcp import McpError
+from mcp.types import INTERNAL_ERROR
 
 
 class FabricApiMockBuilder:
@@ -214,5 +215,5 @@ def assert_unexpected_error_test(
     with pytest.raises(McpError) as exc_info:
         test_function()
 
-    assert exc_info.value.error.code == -32603  # Internal error
+    assert exc_info.value.error.code == INTERNAL_ERROR
     assert error_message_contains in str(exc_info.value.error.message)

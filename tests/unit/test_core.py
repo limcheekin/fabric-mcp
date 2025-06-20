@@ -215,22 +215,37 @@ class TestCore(TestFixturesBase):
     def _test_get_configuration_tool(
         self, fabric_get_configuration: Callable[..., Any]
     ) -> None:
-        config_result: dict[str, Any] = fabric_get_configuration()
-        assert isinstance(config_result, dict)
-        # Check that we have some configuration data
-        assert len(config_result) > 0
-        # Check that sensitive values are redacted when present
-        for key, value in config_result.items():
-            if (
-                isinstance(value, str)
-                and value
-                and any(
-                    key.lower().find(pattern.replace("*", "")) != -1
-                    for pattern in ["*api_key*", "*token*", "*secret*", "*password*"]
-                )
-            ):
-                # If it's a sensitive key with a value, it should be redacted
-                assert value in ("[REDACTED_BY_MCP_SERVER]", "")
+        # Mock the configuration API response
+        mock_config_data = {
+            "openai_api_key": "sk-abc123def456",
+            "anthropic_api_key": "",  # Empty sensitive value
+            "ollama_url": "http://localhost:11434",
+            "regular_setting": "value123",
+        }
+
+        builder = FabricApiMockBuilder().with_json_response(mock_config_data)
+        with mock_fabric_api_client(builder):
+            config_result: dict[str, Any] = fabric_get_configuration()
+            assert isinstance(config_result, dict)
+            # Check that we have some configuration data
+            assert len(config_result) > 0
+            # Check that sensitive values are redacted when present
+            for key, value in config_result.items():
+                if (
+                    isinstance(value, str)
+                    and value
+                    and any(
+                        key.lower().find(pattern.replace("*", "")) != -1
+                        for pattern in [
+                            "*api_key*",
+                            "*token*",
+                            "*secret*",
+                            "*password*",
+                        ]
+                    )
+                ):
+                    # If it's a sensitive key with a value, it should be redacted
+                    assert value in ("[REDACTED_BY_MCP_SERVER]", "")
 
     def test_http_streamable_method_runs_mcp(self, server: FabricMCP):
         """Test that the http_streamable method calls mcp.run() with streamable-http."""
@@ -495,7 +510,9 @@ class TestFabricGetConfiguration(TestFixturesBase):
                 server.fabric_get_configuration()
 
             # Should raise McpError with appropriate message
-            assert "Fabric API error: 500" in str(exc_info.value)
+            assert "Fabric API error during retrieving configuration: 500" in str(
+                exc_info.value
+            )
 
     def test_fabric_get_configuration_invalid_response_type(self, server: FabricMCP):
         """Test handling of invalid JSON response (non-dict)."""

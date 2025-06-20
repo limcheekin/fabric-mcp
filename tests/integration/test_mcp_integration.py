@@ -214,7 +214,7 @@ class TestFabricMCPCore(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 list_patterns_tool()
 
-            assert "Fabric API error: 500" in str(exc_info.value.error.message)
+            assert "Fabric API error during" in str(exc_info.value.error.message)
 
     def test_server_stdio_integration(self, server: FabricMCP):
         """Test the stdio method integration with mocked MCP run."""

@@ -5,6 +5,7 @@ from collections.abc import Callable
 import pytest
 import pytest_asyncio
 from mcp.shared.exceptions import McpError
+from mcp.types import INTERNAL_ERROR
 
 from fabric_mcp.core import FabricMCP
 from tests.shared.fabric_api.base import TestFixturesBase
@@ -86,7 +87,7 @@ class TestFabricGetPatternDetails(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 get_pattern_details_tool("nonexistent_pattern")
 
-            assert_mcp_error(exc_info, -32603, "Fabric API internal error")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Fabric API internal error")
             assert_api_client_calls(mock_api_client, "/patterns/nonexistent_pattern")
 
     def test_pattern_details_with_special_characters(
@@ -148,7 +149,9 @@ class TestFabricGetPatternDetails(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 get_pattern_details_tool("test_pattern")
 
-            assert_mcp_error(exc_info, -32603, "Failed to connect to Fabric API")
+            assert_mcp_error(
+                exc_info, INTERNAL_ERROR, "Failed to connect to Fabric API"
+            )
             # Connection errors may not result in API calls
             assert mock_api_client.get.call_count >= 0
 
@@ -165,7 +168,9 @@ class TestFabricGetPatternDetails(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 get_pattern_details_tool("test_pattern")
 
-            assert_mcp_error(exc_info, -32603, "Failed to connect to Fabric API")
+            assert_mcp_error(
+                exc_info, INTERNAL_ERROR, "Failed to connect to Fabric API"
+            )
             # Timeout errors may not result in completed API calls
             assert mock_api_client.get.call_count >= 0
 
@@ -182,7 +187,11 @@ class TestFabricGetPatternDetails(TestFixturesBase):
             with pytest.raises(McpError) as exc_info:
                 get_pattern_details_tool("nonexistent")
 
-            assert_mcp_error(exc_info, -32603, "Fabric API error: 404")
+            assert_mcp_error(
+                exc_info,
+                INTERNAL_ERROR,
+                "Fabric API error during retrieving pattern details: 404",
+            )
             assert_api_client_calls(mock_api_client, "/patterns/nonexistent")
 
     def test_unexpected_error_handling(
@@ -201,7 +210,9 @@ class TestFabricGetPatternDetails(TestFixturesBase):
                 get_pattern_details_tool("test_pattern")
 
             assert_mcp_error(
-                exc_info, -32603, "Unexpected error during retrieving pattern details"
+                exc_info,
+                INTERNAL_ERROR,
+                "Unexpected error during retrieving pattern details",
             )
             # Unexpected errors may not result in completed API calls
             assert mock_api_client.get.call_count >= 0

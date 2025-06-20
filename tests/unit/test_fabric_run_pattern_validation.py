@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from mcp import McpError
+from mcp.types import INVALID_PARAMS
 
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
@@ -126,21 +127,21 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", temperature=-0.1)
         assert_mcp_error(
-            exc_info, -32602, "temperature must be a number between 0.0 and 2.0"
+            exc_info, INVALID_PARAMS, "temperature must be a number between 0.0 and 2.0"
         )
 
         # Test temperature too high
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", temperature=2.1)
         assert_mcp_error(
-            exc_info, -32602, "temperature must be a number between 0.0 and 2.0"
+            exc_info, INVALID_PARAMS, "temperature must be a number between 0.0 and 2.0"
         )
 
         # Test invalid type
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", temperature="invalid")
         assert_mcp_error(
-            exc_info, -32602, "temperature must be a number between 0.0 and 2.0"
+            exc_info, INVALID_PARAMS, "temperature must be a number between 0.0 and 2.0"
         )
 
     def test_top_p_validation_valid_ranges(
@@ -165,12 +166,16 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
         # Test top_p too low
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", top_p=-0.1)
-        assert_mcp_error(exc_info, -32602, "top_p must be a number between 0.0 and 1.0")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "top_p must be a number between 0.0 and 1.0"
+        )
 
         # Test top_p too high
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", top_p=1.1)
-        assert_mcp_error(exc_info, -32602, "top_p must be a number between 0.0 and 1.0")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "top_p must be a number between 0.0 and 1.0"
+        )
 
     def test_penalty_validation_valid_ranges(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -209,14 +214,18 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", presence_penalty=-2.1)
         assert_mcp_error(
-            exc_info, -32602, "presence_penalty must be a number between -2.0 and 2.0"
+            exc_info,
+            INVALID_PARAMS,
+            "presence_penalty must be a number between -2.0 and 2.0",
         )
 
         # Test presence_penalty too high
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", presence_penalty=2.1)
         assert_mcp_error(
-            exc_info, -32602, "presence_penalty must be a number between -2.0 and 2.0"
+            exc_info,
+            INVALID_PARAMS,
+            "presence_penalty must be a number between -2.0 and 2.0",
         )
 
         # Test frequency_penalty too low
@@ -225,14 +234,18 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
                 "test_pattern", "test input", frequency_penalty=-2.1
             )
         assert_mcp_error(
-            exc_info, -32602, "frequency_penalty must be a number between -2.0 and 2.0"
+            exc_info,
+            INVALID_PARAMS,
+            "frequency_penalty must be a number between -2.0 and 2.0",
         )
 
         # Test frequency_penalty too high
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", frequency_penalty=2.1)
         assert_mcp_error(
-            exc_info, -32602, "frequency_penalty must be a number between -2.0 and 2.0"
+            exc_info,
+            INVALID_PARAMS,
+            "frequency_penalty must be a number between -2.0 and 2.0",
         )
 
     def test_model_name_validation(
@@ -256,11 +269,15 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
         # Test invalid model names
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", model_name="")
-        assert_mcp_error(exc_info, -32602, "model_name must be a non-empty string")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "model_name must be a non-empty string"
+        )
 
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", model_name="   ")
-        assert_mcp_error(exc_info, -32602, "model_name must be a non-empty string")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "model_name must be a non-empty string"
+        )
 
     def test_strategy_name_validation(
         self, fabric_run_pattern_tool: Callable[..., Any]
@@ -283,11 +300,15 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
         # Test invalid strategy names
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", strategy_name="")
-        assert_mcp_error(exc_info, -32602, "strategy_name must be a non-empty string")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "strategy_name must be a non-empty string"
+        )
 
         with pytest.raises(McpError) as exc_info:
             fabric_run_pattern_tool("test_pattern", "test input", strategy_name="   ")
-        assert_mcp_error(exc_info, -32602, "strategy_name must be a non-empty string")
+        assert_mcp_error(
+            exc_info, INVALID_PARAMS, "strategy_name must be a non-empty string"
+        )
 
     def test_parameter_combinations(
         self, fabric_run_pattern_tool: Callable[..., Any]

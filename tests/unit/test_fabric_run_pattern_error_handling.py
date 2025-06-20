@@ -9,7 +9,10 @@ from typing import Any
 
 import pytest
 from mcp import McpError
+from mcp.types import INTERNAL_ERROR
 
+from fabric_mcp.core import FabricMCP
+from tests.shared.fabric_api.utils import fabric_api_server_fixture
 from tests.shared.fabric_api_mocks import (
     FabricApiMockBuilder,
     assert_mcp_error,
@@ -17,14 +20,17 @@ from tests.shared.fabric_api_mocks import (
 )
 from tests.unit.test_fabric_run_pattern_base import TestFabricRunPatternFixtureBase
 
+_ = fabric_api_server_fixture  # to get rid of unused variable warning
+
 
 class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
     """Test cases for fabric_run_pattern tool error handling."""
 
     def test_network_connection_error(
-        self, fabric_run_pattern_tool: Callable[..., Any]
+        self, server: FabricMCP, fabric_run_pattern_tool: Callable[..., Any]
     ) -> None:
         """Test handling of network connection errors."""
+        _ = server  # to avoid unused variable warning
         builder = FabricApiMockBuilder().with_connection_error("Connection failed")
 
         with mock_fabric_api_client(builder) as mock_api_client:
@@ -32,7 +38,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
                 fabric_run_pattern_tool("test_pattern", "test input")
 
             # Connection errors should be wrapped in McpError by the tool wrapper
-            assert_mcp_error(exc_info, -32603, "Error executing pattern")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Error executing pattern")
             mock_api_client.close.assert_called_once()
 
     def test_http_404_error(self, fabric_run_pattern_tool: Callable[..., Any]) -> None:
@@ -43,7 +49,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("nonexistent_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Fabric API returned error 404")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Fabric API returned error 404")
             mock_api_client.close.assert_called_once()
 
     def test_timeout_error(self, fabric_run_pattern_tool: Callable[..., Any]) -> None:
@@ -54,7 +60,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Request timed out")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Request timed out")
             mock_api_client.close.assert_called_once()
 
     def test_sse_error_response(
@@ -67,7 +73,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Pattern execution failed")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Pattern execution failed")
             mock_api_client.close.assert_called_once()
 
     def test_malformed_sse_data(
@@ -80,7 +86,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Malformed SSE data")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Malformed SSE data")
             mock_api_client.close.assert_called_once()
 
     def test_empty_sse_stream(
@@ -93,7 +99,7 @@ class TestFabricRunPatternErrorHandling(TestFabricRunPatternFixtureBase):
             with pytest.raises(McpError) as exc_info:
                 fabric_run_pattern_tool("test_pattern", "test input")
 
-            assert_mcp_error(exc_info, -32603, "Empty SSE stream")
+            assert_mcp_error(exc_info, INTERNAL_ERROR, "Empty SSE stream")
             mock_api_client.close.assert_called_once()
 
     def test_sse_stream_with_non_data_lines(

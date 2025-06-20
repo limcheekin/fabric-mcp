@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from mcp.shared.exceptions import McpError
+from mcp.types import INTERNAL_ERROR, INVALID_PARAMS
 
 from fabric_mcp.core import FabricMCP
 from tests.shared.fabric_api.base import TestFixturesBase
@@ -23,19 +24,18 @@ class TestCoreCoverage(TestFixturesBase):
         self, server: FabricMCP
     ) -> None:
         """Test handling of non-list response from Fabric API."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            mock_response.json.return_value = {"patterns": ["p1", "p2"]}  # Invalid type
-            mock_client.get.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        builder = FabricApiMockBuilder()
+        builder.mock_response.json.return_value = {
+            "patterns": ["p1", "p2"]
+        }  # Invalid type
 
+        with mock_fabric_api_client(builder):
             with pytest.raises(McpError) as exc_info:
                 server.fabric_list_patterns()
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid response from Fabric API: expected list of patterns"
                 ),
@@ -43,7 +43,7 @@ class TestCoreCoverage(TestFixturesBase):
 
     def test_fabric_list_patterns_invalid_item_type(self, server: FabricMCP) -> None:
         """Test handling of list with non-string items from Fabric API."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             mock_client = Mock()
             mock_response = Mock()
             mock_response.json.return_value = ["p1", 123, "p2"]  # Invalid item type
@@ -55,7 +55,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid pattern name in response: expected string, got int"
                 ),
@@ -65,7 +65,7 @@ class TestCoreCoverage(TestFixturesBase):
         self, server: FabricMCP
     ) -> None:
         """Test handling of non-dict response from Fabric API."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             mock_client = Mock()
             mock_response = Mock()
             mock_response.json.return_value = ["invalid"]  # Invalid type
@@ -77,7 +77,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid response from Fabric API:"
                     " expected dict for pattern details"
@@ -86,7 +86,7 @@ class TestCoreCoverage(TestFixturesBase):
 
     def test_fabric_get_pattern_details_missing_fields(self, server: FabricMCP) -> None:
         """Test handling of response with missing fields."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             mock_client = Mock()
             mock_response = Mock()
             mock_response.json.return_value = {
@@ -101,7 +101,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid pattern details response: missing required fields"
                 ),
@@ -115,7 +115,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains="model_name must be a non-empty string",
         )
 
@@ -123,14 +123,14 @@ class TestCoreCoverage(TestFixturesBase):
     def test_fabric_run_pattern_empty_pattern_name(self, server: FabricMCP) -> None:
         """Test ValueError for empty pattern name via fabric_run_pattern."""
         # This should trigger the ValueError in _execute_fabric_pattern
-        with patch("fabric_mcp.core.FabricApiClient"):
+        with patch("fabric_mcp.fabric_tools.FabricApiClient"):
             with pytest.raises(McpError) as exc_info:
                 server.fabric_run_pattern("   ")  # Empty/whitespace pattern name
 
             # The ValueError is now wrapped in McpError
             assert_mcp_error(
                 exc_info,
-                expected_code=-32602,
+                expected_code=INVALID_PARAMS,
                 expected_message_contains=(
                     "pattern_name is required and cannot be empty"
                 ),
@@ -139,14 +139,11 @@ class TestCoreCoverage(TestFixturesBase):
     # Test for line 635: Empty SSE stream validation via fabric_run_pattern
     def test_fabric_run_pattern_empty_sse_stream(self, server: FabricMCP) -> None:
         """Test RuntimeError for empty SSE stream via fabric_run_pattern."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            mock_response.iter_lines.return_value = []  # Empty stream
-            mock_response.raise_for_status.return_value = None
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        builder = FabricApiMockBuilder()
+        builder.mock_response.iter_lines.return_value = []  # Empty stream
+        builder.mock_response.raise_for_status.return_value = None
 
+        with mock_fabric_api_client(builder):
             with pytest.raises(McpError) as exc_info:
                 server.fabric_run_pattern("test_pattern")
 
@@ -155,18 +152,15 @@ class TestCoreCoverage(TestFixturesBase):
     # Test for line 506: Default config creation
     def test_fabric_run_pattern_none_config(self, server: FabricMCP) -> None:
         """Test that None config gets replaced with default PatternExecutionConfig."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            # Return success content to avoid other errors
-            mock_response.iter_lines.return_value = [
-                'data: {"type": "content", "content": "test"}',
-                'data: {"type": "complete"}',
-            ]
-            mock_response.raise_for_status.return_value = None
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        builder = FabricApiMockBuilder()
+        # Return success content to avoid other errors
+        builder.mock_response.iter_lines.return_value = [
+            'data: {"type": "content", "content": "test"}',
+            'data: {"type": "complete"}',
+        ]
+        builder.mock_response.raise_for_status.return_value = None
 
+        with mock_fabric_api_client(builder):
             # Call without specifying config - this will trigger the None default
             # which should hit line 506: config = PatternExecutionConfig()
             result = server.fabric_run_pattern("test_pattern")
@@ -176,21 +170,21 @@ class TestCoreCoverage(TestFixturesBase):
     # Test for line 642: Empty lines in SSE response
     def test_fabric_run_pattern_sse_empty_lines(self, server: FabricMCP) -> None:
         """Test SSE parsing with empty lines that should be skipped."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            # Include empty lines and whitespace-only lines that should be skipped
-            mock_response.iter_lines.return_value = [
-                "",  # Empty line - should trigger continue
-                "   ",  # Whitespace line - should trigger continue
-                'data: {"type": "content", "content": "test"}',
-                "",  # Another empty line
-                'data: {"type": "complete"}',
-            ]
-            mock_response.raise_for_status.return_value = None
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
+        # Use FabricApiMockBuilder for consistent mocking
+        builder = FabricApiMockBuilder()
+        mock_response = Mock()
+        # Include empty lines and whitespace-only lines that should be skipped
+        mock_response.iter_lines.return_value = [
+            "",  # Empty line - should trigger continue
+            "   ",  # Whitespace line - should trigger continue
+            'data: {"type": "content", "content": "test"}',
+            "",  # Another empty line
+            'data: {"type": "complete"}',
+        ]
+        mock_response.raise_for_status.return_value = None
+        builder.mock_api_client.post.return_value = mock_response
 
+        with mock_fabric_api_client(builder):
             result = server.fabric_run_pattern("test_pattern")
             assert isinstance(result, dict)
             assert result["output_text"] == "test"
@@ -198,16 +192,12 @@ class TestCoreCoverage(TestFixturesBase):
     # Test for lines 666-669: SSE error handling and unexpected types
     def test_fabric_run_pattern_sse_error_type(self, server: FabricMCP) -> None:
         """Test RuntimeError for SSE error type in streaming mode."""
+        builder = FabricApiMockBuilder()
+        error_data = json.dumps({"type": "error", "content": "Test error"})
+        builder.mock_response.iter_lines.return_value = [f"data: {error_data}"]
+        builder.mock_response.raise_for_status.return_value = None
 
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            error_data = json.dumps({"type": "error", "content": "Test error"})
-            mock_response.iter_lines.return_value = [f"data: {error_data}"]
-            mock_response.raise_for_status.return_value = None
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
-
+        with mock_fabric_api_client(builder):
             with pytest.raises(RuntimeError) as exc_info:
                 # Use streaming mode to trigger _parse_sse_stream
                 list(server.fabric_run_pattern("test_pattern", stream=True))
@@ -216,16 +206,12 @@ class TestCoreCoverage(TestFixturesBase):
 
     def test_fabric_run_pattern_sse_unexpected_type(self, server: FabricMCP) -> None:
         """Test RuntimeError for unexpected SSE type in streaming mode."""
+        builder = FabricApiMockBuilder()
+        unexpected_data = json.dumps({"type": "unknown_type", "content": "test"})
+        builder.mock_response.iter_lines.return_value = [f"data: {unexpected_data}"]
+        builder.mock_response.raise_for_status.return_value = None
 
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
-            mock_client = Mock()
-            mock_response = Mock()
-            unexpected_data = json.dumps({"type": "unknown_type", "content": "test"})
-            mock_response.iter_lines.return_value = [f"data: {unexpected_data}"]
-            mock_response.raise_for_status.return_value = None
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
-
+        with mock_fabric_api_client(builder):
             with pytest.raises(RuntimeError) as exc_info:
                 # Use streaming mode to trigger _parse_sse_stream
                 list(server.fabric_run_pattern("test_pattern", stream=True))
@@ -245,7 +231,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains="variables must be a dictionary",
         )
 
@@ -262,7 +248,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains=(
                 "variables must be a dictionary with string keys and values"
             ),
@@ -280,7 +266,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains=(
                 "variables must be a dictionary with string keys and values"
             ),
@@ -297,7 +283,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains="attachments must be a list",
         )
 
@@ -314,7 +300,7 @@ class TestCoreCoverage(TestFixturesBase):
 
         assert_mcp_error(
             exc_info,
-            expected_code=-32602,
+            expected_code=INVALID_PARAMS,
             expected_message_contains="attachments must be a list of strings",
         )
 
@@ -349,7 +335,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid response from Fabric API: expected dict for models"
                 ),
@@ -366,7 +352,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains="Invalid models field: expected list",
             )
 
@@ -383,7 +369,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid model name in response: expected string, got int"
                 ),
@@ -400,7 +386,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains="Invalid vendors field: expected dict",
             )
 
@@ -420,7 +406,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid vendor name in response: expected string, got int"
                 ),
@@ -439,7 +425,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid models list for vendor 'openai': expected list"
                 ),
@@ -458,7 +444,7 @@ class TestCoreCoverage(TestFixturesBase):
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains=(
                     "Invalid model name for vendor 'openai': expected string, got int"
                 ),

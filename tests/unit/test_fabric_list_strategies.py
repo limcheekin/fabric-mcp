@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 from mcp.shared.exceptions import McpError
+from mcp.types import INTERNAL_ERROR, INVALID_PARAMS
 
 from fabric_mcp.core import FabricMCP
 from tests.shared.fabric_api.server import MOCK_STRATEGIES
@@ -35,7 +36,7 @@ class TestFabricListStrategies:
         self, server: FabricMCP, mock_strategies_response: list[dict[str, str]]
     ) -> None:
         """Test successful strategy listing."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client
             mock_client = Mock()
             mock_response = Mock()
@@ -75,7 +76,7 @@ class TestFabricListStrategies:
         self, server: FabricMCP, empty_strategies_response: list[dict[str, str]]
     ) -> None:
         """Test handling of empty strategies list."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client
             mock_client = Mock()
             mock_response = Mock()
@@ -121,7 +122,7 @@ class TestFabricListStrategies:
             },
         ]
 
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client
             mock_client = Mock()
             mock_response = Mock()
@@ -158,7 +159,7 @@ class TestFabricListStrategies:
         ]
         bad_return = {"strategies": ["s1", "s2"]}  # Not a list of dicts
 
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client
             mock_client = Mock()
             mock_response = Mock()
@@ -173,7 +174,7 @@ class TestFabricListStrategies:
             # Verify error details
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error
+                expected_code=INTERNAL_ERROR,  # Internal error
                 expected_message_contains=(
                     "Invalid strategy object in response: expected dict, got str"
                 ),
@@ -185,7 +186,7 @@ class TestFabricListStrategies:
 
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error
+                expected_code=INTERNAL_ERROR,  # Internal error
                 expected_message_contains=(
                     "Invalid response from Fabric API: expected list of strategies"
                 ),
@@ -220,7 +221,7 @@ class TestFabricListStrategies:
             },
         ]
 
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client
             mock_client = Mock()
             mock_response = Mock()
@@ -246,7 +247,7 @@ class TestFabricListStrategies:
 
     def test_fabric_commands_http_error(self, server: FabricMCP) -> None:
         """Test handling of HTTP errors from Fabric API."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client to raise HTTPStatusError
             mock_client = Mock()
             mock_response = Mock()
@@ -265,7 +266,7 @@ class TestFabricListStrategies:
             # Verify error details
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error (HTTP -> 32603)
+                expected_code=INTERNAL_ERROR,
                 expected_message_contains="Fabric API error",
             )
 
@@ -275,7 +276,7 @@ class TestFabricListStrategies:
                 server.fabric_get_pattern_details("non_existent_pattern")
             assert_mcp_error(
                 exc_info,
-                expected_code=-32602,
+                expected_code=INVALID_PARAMS,
                 expected_message_contains="Pattern 'non_existent_pattern' not found",
             )
 
@@ -285,7 +286,7 @@ class TestFabricListStrategies:
 
     def test_fabric_list_strategies_request_error(self, server: FabricMCP) -> None:
         """Test handling of request errors (network issues)."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client to raise RequestError
             mock_client = Mock()
             request_error = httpx.RequestError("Connection failed")
@@ -299,7 +300,7 @@ class TestFabricListStrategies:
             # Verify error details
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error (network issue)
+                expected_code=INTERNAL_ERROR,  # Internal error (network issue)
                 expected_message_contains="Failed to connect to Fabric API",
             )
 
@@ -309,7 +310,7 @@ class TestFabricListStrategies:
 
     def test_fabric_list_strategies_json_decode_error(self, server: FabricMCP) -> None:
         """Test handling of JSON decode errors."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client to raise JSON decode error
             mock_client = Mock()
             mock_response = Mock()
@@ -325,7 +326,7 @@ class TestFabricListStrategies:
             # Verify error details
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error
+                expected_code=INTERNAL_ERROR,  # Internal error
                 expected_message_contains=(
                     "Unexpected error during retrieving strategies"
                 ),
@@ -337,7 +338,7 @@ class TestFabricListStrategies:
 
     def test_fabric_list_strategies_unexpected_error(self, server: FabricMCP) -> None:
         """Test handling of unexpected errors."""
-        with patch("fabric_mcp.core.FabricApiClient") as mock_client_class:
+        with patch("fabric_mcp.fabric_tools.FabricApiClient") as mock_client_class:
             # Setup mock client to raise unexpected error
             mock_client = Mock()
             mock_client.get.side_effect = RuntimeError("Unexpected error")
@@ -350,7 +351,7 @@ class TestFabricListStrategies:
             # Verify error details
             assert_mcp_error(
                 exc_info,
-                expected_code=-32603,  # Internal error
+                expected_code=INTERNAL_ERROR,  # Internal error
                 expected_message_contains=(
                     "Unexpected error during retrieving strategies"
                 ),
