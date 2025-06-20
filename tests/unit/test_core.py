@@ -5,7 +5,7 @@ import subprocess
 import sys
 from asyncio.exceptions import CancelledError
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -167,10 +167,31 @@ class TestCore(TestFixturesBase):
             mock_api_client.close.assert_called_once()
 
     def _test_list_models_tool(self, fabric_list_models: Callable[..., Any]) -> None:
-        models_result = fabric_list_models()
-        assert isinstance(models_result, dict)
-        assert "models" in models_result
-        assert "vendors" in models_result
+        # Test fabric_list_models with mocked API
+        builder = FabricApiMockBuilder().with_successful_models_list()
+        with mock_fabric_api_client(builder):
+            models_result: dict[str, Any] = fabric_list_models()
+            assert isinstance(models_result, dict)
+            assert "models" in models_result
+            assert "vendors" in models_result
+            assert isinstance(models_result["models"], list)
+            assert isinstance(models_result["vendors"], dict)
+
+            # Verify default test data structure
+            models = cast(list[str], models_result["models"])
+            vendors = cast(dict[str, list[str]], models_result["vendors"])
+            assert isinstance(models, list)
+            assert isinstance(vendors, dict)
+            assert len(models) == 4  # gpt-4o, gpt-3.5-turbo, claude-3-opus, llama2
+            assert "gpt-4o" in models
+            assert "claude-3-opus" in models
+
+            # Verify vendor structure
+            assert "openai" in vendors
+            assert "anthropic" in vendors
+            assert "ollama" in vendors
+            assert "gpt-4o" in vendors["openai"]
+            assert "claude-3-opus" in vendors["anthropic"]
 
     def _test_list_strategies_tool(
         self, fabric_list_strategies: Callable[..., Any]

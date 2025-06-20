@@ -364,13 +364,97 @@ class FabricMCP(FastMCP[None]):
 
     def fabric_list_models(self) -> dict[Any, Any]:
         """Retrieve configured Fabric models by vendor."""
-        # This is a placeholder for the actual implementation
+        response_data = self._make_fabric_api_request(
+            "/models/names", operation="retrieving models"
+        )
+
+        # Validate response data type
+        if not isinstance(response_data, dict):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message=(
+                        "Invalid response from Fabric API: expected dict for models"
+                    ),
+                )
+            )
+
+        response_data = cast(dict[str, Any], response_data)
+
+        # Validate models field
+        models = response_data.get("models", [])
+        if not isinstance(models, list):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid models field: expected list",
+                )
+            )
+
+        # Validate each model name is a string
+        models_list = cast(list[Any], models)
+        for item in models_list:
+            if not isinstance(item, str):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=(
+                            "Invalid model name in response: "
+                            f"expected string, got {type(item).__name__}"
+                        ),
+                    )
+                )
+
+        # Validate vendors field
+        vendors = response_data.get("vendors", {})
+        if not isinstance(vendors, dict):
+            raise McpError(
+                ErrorData(
+                    code=-32603,  # Internal error
+                    message="Invalid vendors field: expected dict",
+                )
+            )
+
+        # Validate vendor structure - each vendor should have a list of strings
+        vendors_dict = cast(dict[Any, Any], vendors)
+        for vendor_name, vendor_models in vendors_dict.items():
+            if not isinstance(vendor_name, str):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=(
+                            "Invalid vendor name in response: "
+                            f"expected string, got {type(vendor_name).__name__}"
+                        ),
+                    )
+                )
+            if not isinstance(vendor_models, list):
+                raise McpError(
+                    ErrorData(
+                        code=-32603,  # Internal error
+                        message=(
+                            f"Invalid models list for vendor '{vendor_name}': "
+                            "expected list"
+                        ),
+                    )
+                )
+            vendor_models_list = cast(list[Any], vendor_models)
+            for model in vendor_models_list:
+                if not isinstance(model, str):
+                    raise McpError(
+                        ErrorData(
+                            code=-32603,  # Internal error
+                            message=(
+                                f"Invalid model name for vendor '{vendor_name}': "
+                                f"expected string, got {type(model).__name__}"
+                            ),
+                        )
+                    )
+
+        # Return validated structure
         return {
-            "models": ["gpt-4o", "gpt-3.5-turbo", "claude-3-opus"],
-            "vendors": {
-                "openai": ["gpt-4o", "gpt-3.5-turbo"],
-                "anthropic": ["claude-3-opus"],
-            },
+            "models": cast(list[str], models),
+            "vendors": cast(dict[str, list[str]], vendors),
         }
 
     def fabric_list_strategies(self) -> dict[Any, Any]:

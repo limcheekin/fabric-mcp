@@ -115,6 +115,38 @@ class FabricApiMockBuilder:
         self.mock_response.json.return_value = strategies
         return self
 
+    def with_successful_models_list(
+        self,
+        models: list[str] | None = None,
+        vendors: dict[str, list[str]] | None = None,
+    ) -> "FabricApiMockBuilder":
+        """Configure mock for successful models list response.
+
+        Args:
+            models: List of all model names. Defaults to common test models.
+            vendors: Dict mapping vendor names to model lists.
+                Defaults to common test vendors.
+
+        Returns:
+            Self for method chaining
+        """
+        if models is None:
+            models = ["gpt-4o", "gpt-3.5-turbo", "claude-3-opus", "llama2"]
+
+        if vendors is None:
+            vendors = {
+                "openai": ["gpt-4o", "gpt-3.5-turbo"],
+                "anthropic": ["claude-3-opus"],
+                "ollama": ["llama2"],
+            }
+
+        response_data = {
+            "models": models,
+            "vendors": vendors,
+        }
+        self.mock_response.json.return_value = response_data
+        return self
+
     def with_raw_response_data(self, data: Any) -> "FabricApiMockBuilder":
         """Configure mock to return raw response data (for testing mixed types).
 

@@ -8,7 +8,11 @@ from mcp.shared.exceptions import McpError
 
 from fabric_mcp.core import FabricMCP
 from tests.shared.fabric_api.base import TestFixturesBase
-from tests.shared.fabric_api_mocks import assert_mcp_error
+from tests.shared.fabric_api_mocks import (
+    FabricApiMockBuilder,
+    assert_mcp_error,
+    mock_fabric_api_client,
+)
 
 
 class TestCoreCoverage(TestFixturesBase):
@@ -313,3 +317,149 @@ class TestCoreCoverage(TestFixturesBase):
             expected_code=-32602,
             expected_message_contains="attachments must be a list of strings",
         )
+
+    # Tests for fabric_list_models (Story 4.1)
+    def test_fabric_list_models_success(self, server: FabricMCP) -> None:
+        """Test successful fabric_list_models response."""
+        builder = FabricApiMockBuilder().with_successful_models_list()
+        with mock_fabric_api_client(builder):
+            result = server.fabric_list_models()
+            assert isinstance(result, dict)
+            assert "models" in result
+            assert "vendors" in result
+            assert isinstance(result["models"], list)
+            assert isinstance(result["vendors"], dict)
+
+    def test_fabric_list_models_empty_response(self, server: FabricMCP) -> None:
+        """Test fabric_list_models with empty models and vendors."""
+        builder = FabricApiMockBuilder().with_successful_models_list(
+            models=[], vendors={}
+        )
+        with mock_fabric_api_client(builder):
+            result = server.fabric_list_models()
+            assert result["models"] == []
+            assert result["vendors"] == {}
+
+    def test_fabric_list_models_invalid_response_type(self, server: FabricMCP) -> None:
+        """Test handling of non-dict response from Fabric API."""
+        builder = FabricApiMockBuilder().with_raw_response_data(["invalid"])
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains=(
+                    "Invalid response from Fabric API: expected dict for models"
+                ),
+            )
+
+    def test_fabric_list_models_invalid_models_field(self, server: FabricMCP) -> None:
+        """Test handling of invalid models field type."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {"models": "not_a_list", "vendors": {}}
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains="Invalid models field: expected list",
+            )
+
+    def test_fabric_list_models_invalid_model_item_type(
+        self, server: FabricMCP
+    ) -> None:
+        """Test handling of non-string items in models list."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {"models": ["gpt-4o", 123, "claude-3-opus"], "vendors": {}}
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains=(
+                    "Invalid model name in response: expected string, got int"
+                ),
+            )
+
+    def test_fabric_list_models_invalid_vendors_field(self, server: FabricMCP) -> None:
+        """Test handling of invalid vendors field type."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {"models": ["gpt-4o"], "vendors": "not_a_dict"}
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains="Invalid vendors field: expected dict",
+            )
+
+    def test_fabric_list_models_invalid_vendor_name_type(
+        self, server: FabricMCP
+    ) -> None:
+        """Test handling of non-string vendor names."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {
+                "models": ["gpt-4o"],
+                "vendors": {123: ["gpt-4o"], "openai": ["gpt-3.5-turbo"]},
+            }
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains=(
+                    "Invalid vendor name in response: expected string, got int"
+                ),
+            )
+
+    def test_fabric_list_models_invalid_vendor_models_type(
+        self, server: FabricMCP
+    ) -> None:
+        """Test handling of non-list vendor models."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {"models": ["gpt-4o"], "vendors": {"openai": "not_a_list"}}
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains=(
+                    "Invalid models list for vendor 'openai': expected list"
+                ),
+            )
+
+    def test_fabric_list_models_invalid_vendor_model_item_type(
+        self, server: FabricMCP
+    ) -> None:
+        """Test handling of non-string model names in vendor lists."""
+        builder = FabricApiMockBuilder().with_raw_response_data(
+            {"models": ["gpt-4o"], "vendors": {"openai": ["gpt-4o", 456]}}
+        )
+        with mock_fabric_api_client(builder):
+            with pytest.raises(McpError) as exc_info:
+                server.fabric_list_models()
+
+            assert_mcp_error(
+                exc_info,
+                expected_code=-32603,
+                expected_message_contains=(
+                    "Invalid model name for vendor 'openai': expected string, got int"
+                ),
+            )
