@@ -736,14 +736,6 @@ class FabricMCP(FastMCP[None]):
                 )
             )
 
-    def _generator_dict_keys_values(
-        self, d: dict[Any, Any]
-    ) -> Generator[Any, None, None]:
-        """Yield each key and then each value from a dict as single objects."""
-        for key, value in d.items():
-            yield key
-            yield value
-
     def _validate_variables_parameter(self, variables: Any | None) -> None:
         """Validate variables parameter: dict with string keys and values.
 
@@ -762,8 +754,8 @@ class FabricMCP(FastMCP[None]):
                     )
                 )
             list_of_dict_stuff: list[Any] = list(
-                self._generator_dict_keys_values(cast(dict[Any, Any], variables))
-            )
+                cast(list[Any], variables.values())
+            ) + list(cast(list[Any], variables.keys()))
             if any(not isinstance(item, str) for item in list_of_dict_stuff):
                 raise McpError(
                     ErrorData(
