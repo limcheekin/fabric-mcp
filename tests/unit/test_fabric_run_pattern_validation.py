@@ -16,7 +16,11 @@ from tests.shared.fabric_api_mocks import (
     assert_mcp_error,
     mock_fabric_api_client,
 )
-from tests.unit.test_fabric_run_pattern_base import TestFabricRunPatternFixtureBase
+from tests.unit.test_fabric_run_pattern_base import (
+    COMMON_PARAMS_FULL,
+    COMMON_PARAMS_PARTIAL,
+    TestFabricRunPatternFixtureBase,
+)
 
 
 class TestFabricRunPatternInputValidation(TestFabricRunPatternFixtureBase):
@@ -298,12 +302,7 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
             result = fabric_run_pattern_tool(
                 "test_pattern",
                 "test input",
-                model_name="gpt-4",
-                temperature=0.8,
-                top_p=0.95,
-                presence_penalty=0.1,
-                frequency_penalty=-0.1,
-                strategy_name="creative",
+                **COMMON_PARAMS_FULL,
             )
             assert result["output_text"] == "Parameter combination test"
 
@@ -311,8 +310,6 @@ class TestFabricRunPatternParameterValidation(TestFabricRunPatternFixtureBase):
             result = fabric_run_pattern_tool(
                 "test_pattern",
                 "test input",
-                model_name="claude-3-opus",
-                temperature=0.3,
-                strategy_name="analytical",
+                **COMMON_PARAMS_PARTIAL,
             )
             assert result["output_text"] == "Parameter combination test"

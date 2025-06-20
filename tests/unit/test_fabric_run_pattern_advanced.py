@@ -24,7 +24,10 @@ from tests.shared.fabric_api_mocks import (
     assert_mcp_error,
     mock_fabric_api_client,
 )
-from tests.unit.test_fabric_run_pattern_base import TestFabricRunPatternFixtureBase
+from tests.unit.test_fabric_run_pattern_base import (
+    COMMON_PARAMS_FULL,
+    TestFabricRunPatternFixtureBase,
+)
 
 
 class TestFabricRunPatternRequestConstruction(TestFabricRunPatternFixtureBase):
@@ -42,12 +45,7 @@ class TestFabricRunPatternRequestConstruction(TestFabricRunPatternFixtureBase):
             fabric_run_pattern_tool(
                 "test_pattern",
                 "test input",
-                model_name="claude-3-opus",
-                temperature=0.8,
-                top_p=0.95,
-                presence_penalty=0.1,
-                frequency_penalty=-0.1,
-                strategy_name="creative",
+                **COMMON_PARAMS_FULL,
             )
 
             # Verify API was called with correct parameters

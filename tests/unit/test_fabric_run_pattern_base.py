@@ -12,6 +12,22 @@ from fastmcp.tools import Tool
 
 from tests.shared.fabric_api.base import TestFixturesBase
 
+# Common parameter sets to reduce code duplication
+COMMON_PARAMS_FULL = {
+    "model_name": "claude-3-opus",
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "presence_penalty": 0.1,
+    "frequency_penalty": -0.1,
+    "strategy_name": "creative",
+}
+
+COMMON_PARAMS_PARTIAL = {
+    "model_name": "gpt-4",
+    "temperature": 0.3,
+    "strategy_name": "analytical",
+}
+
 
 class TestFabricRunPatternFixtureBase(TestFixturesBase):
     """Base test class for fabric_run_pattern tool tests."""

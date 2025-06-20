@@ -341,7 +341,7 @@ class TransportTestBase:
                         "pattern_name": "test_pattern",
                         "input_text": "test input",
                         "model_name": "gpt-4",
-                        "temperature": 0.8,
+                        "temperature": 0.85,
                         "top_p": 0.95,
                         "presence_penalty": 0.1,
                         "frequency_penalty": -0.1,
