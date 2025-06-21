@@ -88,9 +88,10 @@ CMD ["fabric-mcp", "--http-streamable", "--host", "0.0.0.0", "--port", "8000"]
 # --- Security Scanning Stage (Optional but Recommended) ---
 # This stage uses Trivy to scan the final image for vulnerabilities.
 # It doesn't affect the final image but can be used in CI/CD to gate deployments.
-FROM aquasec/trivy:latest AS scan
-ARG TRIVY_SEVERITY="HIGH,CRITICAL"
-COPY --from=final / /rootfs/
+# FROM aquasec/trivy:latest AS scan
+# ARG TRIVY_SEVERITY="HIGH,CRITICAL"
+# COPY --from=final / /rootfs/
+
 # The --exit-code 1 will fail the build if vulnerabilities of the specified severity are found.
 # Use --exit-code 0 to just see the report without failing the build.
-RUN trivy rootfs /rootfs --severity=${TRIVY_SEVERITY} --exit-code 0
+# RUN trivy rootfs /rootfs --severity=${TRIVY_SEVERITY} --exit-code 0
