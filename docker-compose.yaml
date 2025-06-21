@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  # The Fabric MCP Server, exposed directly
+  fabric-mcp:
+    container_name: fabric-mcp
+    build:
+      context: .
+      args:
+        # This ARG must match the one in the Dockerfile
+        PYTHON_VERSION: 3.12
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      fabric:
+        condition: service_healthy
+    # Use Docker Secrets for the API key
+    secrets:
+      - fabric_api_key
+    environment:
+      # The application now reads the API key from the secret file
+      - FABRIC_API_KEY_FILE=/run/secrets/fabric_api_key
+      - FABRIC_BASE_URL=http://fabric:8080
+      - FABRIC_MCP_LOG_LEVEL=INFO
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.25', memory: 256M }
+    # Production-ready logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # The Fabric Server
+  fabric:
+    container_name: fabric
+    # Build the Docker image from the Dockerfile of the repo.
+    build: 
+      context: https://github.com/limcheekin/fabric.git#docker
+    restart: unless-stopped
+    # Use a named volume for persistent configuration
+    volumes:
+      - fabric_config:/root/.config/fabric
+    # Use Docker Secrets for the API key here as well
+    secrets:
+      - fabric_api_key
+    command: sh -c 'fabric --serve --api-key "$(cat /run/secrets/fabric_api_key)"'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: '1.0', memory: 1G }
+        reservations: { cpus: '0.5', memory: 512M }
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Define the named volume for persistent fabric configuration
+volumes:
+  fabric_config:
+    driver: local
+    name: fabric_config
+
+# Define the secret. The value will be read from a local file.
+secrets:
+  fabric_api_key:
+    file: ./fabric_api_key.txt
