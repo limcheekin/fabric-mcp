@@ -1,0 +1,29 @@
+version: '3.9'
+
+services:
+  # The Fabric MCP Server, exposed directly
+  fabric-mcp:
+    container_name: fabric-mcp
+    build:
+      context: .
+      args:
+        # This ARG must match the one in the Dockerfile
+        PYTHON_VERSION: 3.12
+    restart: unless-stopped
+    ports:
+      - "9992:8000"
+    environment:
+      - FABRIC_API_KEY=${FABRIC_API_KEY:-your_fabric_key_here}
+      - FABRIC_BASE_URL=${FABRIC_BASE_URL:-http://fabric:8080}
+      - FABRIC_MCP_LOG_LEVEL=${FABRIC_MCP_LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.25', memory: 256M }
+    # Production-ready logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
