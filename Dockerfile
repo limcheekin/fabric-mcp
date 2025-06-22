@@ -1,58 +1,31 @@
-# Dockerfile (Security-Hardened & Production-Ready)
+# Dockerfile (Security-Hardened & Production-Ready using pip install)
 
 # Use an ARG to define the Python version for easy updates.
-ARG PYTHON_VERSION=3.12
-
-# --- Base Stage ---
-# Minimal base image with only necessary tools for building.
-FROM python:${PYTHON_VERSION}-slim-bookworm AS base
-
-# Add metadata labels for better image management
-LABEL org.opencontainers.image.source="https://github.com/ksylvan/fabric-mcp" \
-      org.opencontainers.image.description="Fabric MCP Server" \
-      org.opencontainers.image.licenses="MIT"
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# Install uv in a separate layer for better caching
-RUN pip install uv
-
+ARG PYTHON_VERSION=3.11
 
 # --- Builder Stage ---
-# This stage builds the virtual environment with all dependencies.
-FROM base AS builder
+# This stage fetches the package and its dependencies from PyPI.
+FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
 
-WORKDIR /app
+# Set essential environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Create a non-root user that will own the files
+# Create a non-root user that will be copied to the final stage
 RUN useradd --system --uid 1001 appuser
 
-# Create the virtual environment
-RUN uv venv /opt/venv
+# Create a directory to install the packages into
+WORKDIR /install
 
-# Copy dependency definition files first to leverage Docker layer caching
-COPY pyproject.toml uv.lock* ./
-
-# Copy the application source code *before* installation.
-# This allows the build backend (hatch) to access files it needs, like __about__.py,
-# to determine the package version.
-COPY src/ ./src/
-COPY README.md README.md
-
-# Install dependencies into the venv.
-# --no-cache is used to keep layers small.
-RUN . /opt/venv/bin/activate && uv pip install --no-cache .
-
-# Set ownership of the installed packages
-RUN chown -R appuser:appuser /opt/venv
+# Install the package and its dependencies into the current directory (/install).
+# Using --target ensures all files are in one place for easy copying to the next stage.
+# This assumes 'fabric-mcp' is available on a package index like PyPI.
+RUN pip install --target=. fabric-mcp
 
 
 # --- Final Stage ---
 # This is the final, ultra-slim, and secure production image.
-# It uses a distroless base image which contains only the app and its runtime dependencies.
-# This minimizes the attack surface by removing shells, package managers, etc.
 FROM gcr.io/distroless/python3-debian12 AS final
 
 WORKDIR /app
@@ -61,37 +34,22 @@ WORKDIR /app
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
-# Copy the virtual environment with installed dependencies
-COPY --chown=1001:1001 --from=builder /opt/venv /opt/venv
+# Copy the installed packages from the builder stage into a clean location
+COPY --chown=1001:1001 --from=builder /install /opt/packages
 
-# Copy the application source code
-COPY --chown=1001:1001 src/ ./src/
+# Set the PYTHONPATH so the Python interpreter can find the installed modules.
+ENV PYTHONPATH="/opt/packages"
 
-# Switch to the non-root user
+# Switch to the non-root user for added security
 USER appuser
-
-# Set the PATH to include the venv
-ENV PATH="/opt/venv/bin:$PATH"
 
 # Expose the server port
 EXPOSE 8000
 
-# Healthcheck without needing curl/bash. It uses Python's built-in http.client.
-# This is compatible with the distroless image.
+# Healthcheck to ensure the server is running correctly
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD ["python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/'); exit(0 if conn.getresponse().status < 500 else 1)"]
+  CMD ["python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/message'); exit(0 if conn.getresponse().status < 500 else 1)"]
 
-# Set the default command to run the server
-CMD ["uv", "run", "fabric-mcp", "--http-streamable", "--host", "0.0.0.0", "--port", "8000"]
-
-
-# --- Security Scanning Stage (Optional but Recommended) ---
-# This stage uses Trivy to scan the final image for vulnerabilities.
-# It doesn't affect the final image but can be used in CI/CD to gate deployments.
-# FROM aquasec/trivy:latest AS scan
-# ARG TRIVY_SEVERITY="HIGH,CRITICAL"
-# COPY --from=final / /rootfs/
-
-# The --exit-code 1 will fail the build if vulnerabilities of the specified severity are found.
-# Use --exit-code 0 to just see the report without failing the build.
-# RUN trivy rootfs /rootfs --severity=${TRIVY_SEVERITY} --exit-code 0
+# Use the default distroless entrypoint ("python3") and run the app as a module.
+# This remains the most reliable method as it avoids all shebang/PATH issues.
+CMD ["-m", "fabric_mcp.cli", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
