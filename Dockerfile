@@ -82,7 +82,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/'); exit(0 if conn.getresponse().status < 500 else 1)"]
 
 # Set the default command to run the server
-CMD ["fabric-mcp", "--http-streamable", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "fabric-mcp", "--http-streamable", "--host", "0.0.0.0", "--port", "8000"]
 
 
 # --- Security Scanning Stage (Optional but Recommended) ---
