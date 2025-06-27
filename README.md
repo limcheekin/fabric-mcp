@@ -2,6 +2,7 @@
 
 [![License: MIT][mit_license]][mit_license_link]
 [![image](https://img.shields.io/pypi/v/fabric-mcp.svg)](https://pypi.python.org/pypi/fabric-mcp)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ksylvan/fabric-mcp)
 
 | main  |   |  | develop  |   |
 |:---:|:---:|:---:|:---:|:---:|
@@ -64,6 +65,8 @@ This project is feature-complete.
 The project was completed by using the [BMAD-METHOD (Breakthrough Method of Agile Ai-Driven Development)][bmad-method].
 
 The core architecture and proposed tools are outlined in the [High-Level Architecture Document][architecture_doc].
+
+You can also use [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ksylvan/fabric-mcp) to explore the source code.
 
 ```bash
 # you can also use pnpm if you prefer
