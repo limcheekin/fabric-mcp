@@ -37,6 +37,7 @@ def load_fabric_env() -> bool:
         WARN level: when file exists but has loading issues
     """
     env_file_path = get_fabric_env_path()
+    print("env_file_path", env_file_path)
 
     try:
         if not env_file_path.exists():
