@@ -76,7 +76,7 @@ def get_default_model() -> tuple[str | None, str | None]:
     # Get values directly from os.environ after load_dotenv
     default_model = os.environ.get("DEFAULT_MODEL")
     default_vendor = os.environ.get("DEFAULT_VENDOR")
-
+    logger.debug(f"DEFAULT_MODEL = {default_model}")
     # Convert empty strings to None
     if not default_model:
         default_model = None

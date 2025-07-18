@@ -2,8 +2,8 @@
 
 DEFAULT_MCP_HTTP_PATH = "/message"
 
-DEFAULT_VENDOR = "Gemini"
-DEFAULT_MODEL = "gemini-2.5-flash"  # Default model if none specified in config
+DEFAULT_VENDOR = "openai"
+DEFAULT_MODEL = "gpt-4o"  # Default model if none specified in config
 
 # Sensitive configuration key patterns for redaction
 SENSITIVE_CONFIG_PATTERNS = ["*_API_KEY", "*_TOKEN", "*_SECRET", "*_PASSWORD"]
