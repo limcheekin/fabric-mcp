@@ -16,6 +16,8 @@ services:
       - FABRIC_API_KEY=${FABRIC_API_KEY:-your_fabric_key_here}
       - FABRIC_BASE_URL=${FABRIC_BASE_URL:-http://fabric:8080}
       - FABRIC_MCP_LOG_LEVEL=${FABRIC_MCP_LOG_LEVEL:-INFO}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gpt-4o}
+      - DEFAULT_VENDOR=${DEFAULT_VENDOR:-openai}
     deploy:
       resources:
         limits: { cpus: '0.50', memory: 512M }
