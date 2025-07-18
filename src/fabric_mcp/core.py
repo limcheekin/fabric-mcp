@@ -132,8 +132,8 @@ class FabricMCP(FastMCP[None], FabricToolsMixin, SSEParserMixin, ValidationMixin
         prompt_data: dict[str, Any] = {
             "userInput": input_text,
             "patternName": pattern_name.strip(),
-            "model": model_name,
-            "vendor": vendor,
+            # "model": model_name,
+            # "vendor": vendor,
             "contextName": "",
             "strategyName": config.strategy_name or "",
         }
