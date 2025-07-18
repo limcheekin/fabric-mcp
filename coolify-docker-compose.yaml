@@ -17,7 +17,7 @@ services:
       - FABRIC_BASE_URL=${FABRIC_BASE_URL:-http://fabric:8080}
       - FABRIC_MCP_LOG_LEVEL=${FABRIC_MCP_LOG_LEVEL:-INFO}
     volumes:
-      - /home/limcheekin/docker/volumes/fabric:~/.config/fabric:ro
+      - /home/limcheekin/docker/volumes/fabric:/.config/fabric:ro
     deploy:
       resources:
         limits: { cpus: '0.50', memory: 512M }
